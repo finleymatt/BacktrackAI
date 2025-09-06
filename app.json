@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "BacktrackNew",
-    "slug": "BacktrackNew",
+    "name": "Instagram Content Organizer",
+    "slug": "instagram-content-organizer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
