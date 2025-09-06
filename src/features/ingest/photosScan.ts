@@ -1,0 +1,350 @@
+import * as MediaLibrary from 'expo-media-library';
+import { ItemsRepository } from '../../data/repositories/items';
+import { Item } from '../../data/models';
+
+export interface ScreenshotDetectionResult {
+  success: boolean;
+  itemsCreated: number;
+  errors: string[];
+  permissionGranted: boolean;
+}
+
+export interface ScreenshotCandidate {
+  uri: string;
+  filename: string;
+  creationTime: number;
+  width: number;
+  height: number;
+  aspectRatio: number;
+}
+
+/**
+ * Request Photos permission with user-friendly rationale
+ */
+export const requestPhotosPermission = async (): Promise<boolean> => {
+  try {
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    return status === 'granted';
+  } catch (error) {
+    console.error('Failed to request photos permission:', error);
+    return false;
+  }
+};
+
+/**
+ * Check if Photos permission is already granted
+ */
+export const checkPhotosPermission = async (): Promise<boolean> => {
+  try {
+    const { status } = await MediaLibrary.getPermissionsAsync();
+    return status === 'granted';
+  } catch (error) {
+    console.error('Failed to check photos permission:', error);
+    return false;
+  }
+};
+
+/**
+ * Detect if an image is likely a screenshot based on heuristics
+ */
+export const isScreenshot = (asset: MediaLibrary.Asset): boolean => {
+  // Heuristic 1: Filename patterns (most reliable indicator)
+  const filename = asset.filename.toLowerCase();
+  const screenshotPatterns = [
+    'screenshot',
+    'screen_shot',
+    'screen shot',
+    'capture',
+    'snapshot',
+    'img_', // Common Android pattern
+    'photo_', // Common iOS pattern with timestamp
+  ];
+  
+  const hasScreenshotFilename = screenshotPatterns.some(pattern => 
+    filename.includes(pattern)
+  );
+
+  // Heuristic 2: Aspect ratio (screenshots are often device screen ratios)
+  const aspectRatio = asset.width / asset.height;
+  const commonScreenRatios = [
+    16/9,    // 1.78 - Common widescreen
+    18/9,    // 2.0 - Modern phones
+    19.5/9,  // 2.17 - iPhone X series
+    20/9,    // 2.22 - Ultra-wide phones
+    4/3,     // 1.33 - iPad/older devices
+    3/2,     // 1.5 - Some tablets
+  ];
+  
+  const hasScreenAspectRatio = commonScreenRatios.some(ratio => 
+    Math.abs(aspectRatio - ratio) < 0.1 // Allow 10% tolerance
+  );
+
+  // Heuristic 3: Creation time (screenshots are usually recent)
+  const now = Date.now();
+  const assetTime = asset.creationTime * 1000; // Convert to milliseconds
+  const isRecent = (now - assetTime) < (30 * 24 * 60 * 60 * 1000); // Last 30 days
+
+  // Heuristic 4: Exclude obvious non-screenshots
+  const isObviousPhoto = filename.includes('dsc') || // Digital camera photos
+                        filename.includes('img') || // Generic image
+                        filename.includes('photo') || // Explicit photo
+                        filename.includes('camera') || // Camera app
+                        filename.includes('snapchat') || // Social media
+                        filename.includes('instagram') ||
+                        filename.includes('whatsapp') ||
+                        filename.includes('telegram');
+
+  // Combine heuristics with weighted scoring
+  let score = 0;
+  if (hasScreenshotFilename) score += 4; // Increased weight for filename
+  if (hasScreenAspectRatio) score += 2;
+  if (isRecent) score += 1;
+  if (isObviousPhoto) score -= 3; // Strong penalty for obvious photos
+
+  // Consider it a screenshot if score >= 4 (increased threshold)
+  return score >= 4;
+};
+
+/**
+ * Get recent images from the device's photo library
+ */
+export const getRecentImages = async (limit: number = 100): Promise<MediaLibrary.Asset[]> => {
+  try {
+    const hasPermission = await checkPhotosPermission();
+    if (!hasPermission) {
+      throw new Error('Photos permission not granted');
+    }
+
+    // First, try to get all photos directly without specifying an album
+    // This is more reliable across different devices and OS versions
+    const assets = await MediaLibrary.getAssetsAsync({
+      first: limit,
+      mediaType: MediaLibrary.MediaType.photo,
+      sortBy: [MediaLibrary.SortBy.creationTime],
+    });
+
+    if (assets.assets.length > 0) {
+      return assets.assets;
+    }
+
+    // Fallback: try to find albums if direct access doesn't work
+    const albums = await MediaLibrary.getAlbumsAsync({
+      includeSmartAlbums: true,
+    });
+
+    console.log('Available albums:', albums.map(album => album.title));
+
+    // Look for common album names across different platforms
+    const recentAlbum = albums.find((album: MediaLibrary.Album) => {
+      const title = album.title.toLowerCase();
+      return (
+        title.includes('recent') ||
+        title.includes('camera roll') ||
+        title.includes('all photos') ||
+        title.includes('photos') ||
+        title.includes('library') ||
+        title === 'recents' ||
+        title === 'camera' ||
+        title === 'all'
+      );
+    });
+
+    if (!recentAlbum) {
+      // If no specific album found, try the first album that has photos
+      for (const album of albums) {
+        try {
+          const albumAssets = await MediaLibrary.getAssetsAsync({
+            album: album,
+            first: 1,
+            mediaType: MediaLibrary.MediaType.photo,
+          });
+          if (albumAssets.assets.length > 0) {
+            // Found an album with photos, get more from it
+            const moreAssets = await MediaLibrary.getAssetsAsync({
+              album: album,
+              first: limit,
+              mediaType: MediaLibrary.MediaType.photo,
+              sortBy: [MediaLibrary.SortBy.creationTime],
+            });
+            return moreAssets.assets;
+          }
+        } catch (error) {
+          console.warn(`Failed to get assets from album ${album.title}:`, error);
+          continue;
+        }
+      }
+      throw new Error('No albums with photos found');
+    }
+
+    const albumAssets = await MediaLibrary.getAssetsAsync({
+      album: recentAlbum,
+      first: limit,
+      mediaType: MediaLibrary.MediaType.photo,
+      sortBy: [MediaLibrary.SortBy.creationTime],
+    });
+
+    return albumAssets.assets;
+  } catch (error) {
+    console.error('Failed to get recent images:', error);
+    throw error;
+  }
+};
+
+/**
+ * Convert MediaLibrary asset to ScreenshotCandidate
+ */
+export const assetToCandidate = (asset: MediaLibrary.Asset): ScreenshotCandidate => {
+  return {
+    uri: asset.uri,
+    filename: asset.filename,
+    creationTime: asset.creationTime,
+    width: asset.width,
+    height: asset.height,
+    aspectRatio: asset.width / asset.height,
+  };
+};
+
+/**
+ * Create an Item from a screenshot candidate
+ */
+export const createItemFromScreenshot = async (candidate: ScreenshotCandidate): Promise<Item> => {
+  const title = `Screenshot - ${new Date(candidate.creationTime * 1000).toLocaleDateString()}`;
+  const description = `Captured screenshot from ${candidate.filename}`;
+
+  return await ItemsRepository.create({
+    title,
+    description,
+    content_url: candidate.uri,
+    thumbnail_url: candidate.uri, // Use the same URI for thumbnail
+    source: 'photo_scan',
+  });
+};
+
+/**
+ * Main function to scan for screenshots and ingest them into the database
+ */
+export const scanAndIngestScreenshots = async (): Promise<ScreenshotDetectionResult> => {
+  const result: ScreenshotDetectionResult = {
+    success: false,
+    itemsCreated: 0,
+    errors: [],
+    permissionGranted: false,
+  };
+
+  try {
+    // Check or request permission
+    let hasPermission = await checkPhotosPermission();
+    if (!hasPermission) {
+      hasPermission = await requestPhotosPermission();
+    }
+
+    result.permissionGranted = hasPermission;
+
+    if (!hasPermission) {
+      result.errors.push('Photos permission denied by user');
+      return result;
+    }
+
+    // Get recent images
+    const recentImages = await getRecentImages(200); // Get more images to increase chances of finding screenshots
+    
+    console.log(`Retrieved ${recentImages.length} recent images from photo library`);
+    
+    if (recentImages.length === 0) {
+      result.errors.push('No photos found in your photo library');
+      return result;
+    }
+    
+    // Debug: Log some sample filenames to understand what we're working with
+    console.log('Sample recent image filenames:', recentImages.slice(0, 5).map(img => img.filename));
+    
+    // Filter for screenshots
+    const screenshotCandidates = recentImages
+      .filter(isScreenshot)
+      .map(assetToCandidate);
+
+    console.log(`Found ${screenshotCandidates.length} potential screenshots out of ${recentImages.length} recent images`);
+    
+    // Debug: Log the filenames of detected screenshots
+    if (screenshotCandidates.length > 0) {
+      console.log('Detected screenshot filenames:', screenshotCandidates.map(c => c.filename));
+    }
+
+    // Create items for each screenshot (avoiding duplicates)
+    for (const candidate of screenshotCandidates) {
+      try {
+        // Check if this screenshot is already ingested
+        const alreadyIngested = await isScreenshotAlreadyIngested(candidate.uri);
+        if (alreadyIngested) {
+          console.log(`Skipping already ingested screenshot: ${candidate.filename}`);
+          continue;
+        }
+        
+        await createItemFromScreenshot(candidate);
+        result.itemsCreated++;
+      } catch (error) {
+        const errorMsg = `Failed to create item for ${candidate.filename}: ${error}`;
+        console.error(errorMsg);
+        result.errors.push(errorMsg);
+      }
+    }
+
+    result.success = true;
+    console.log(`Successfully ingested ${result.itemsCreated} screenshots`);
+
+  } catch (error) {
+    const errorMsg = `Failed to scan screenshots: ${error}`;
+    console.error(errorMsg);
+    result.errors.push(errorMsg);
+  }
+
+  return result;
+};
+
+/**
+ * Get screenshots that have already been ingested (to avoid duplicates)
+ */
+export const getIngestedScreenshots = async (): Promise<Item[]> => {
+  try {
+    return await ItemsRepository.getBySource('photo_scan');
+  } catch (error) {
+    console.error('Failed to get ingested screenshots:', error);
+    return [];
+  }
+};
+
+/**
+ * Check if a screenshot URI has already been ingested
+ */
+export const isScreenshotAlreadyIngested = async (uri: string): Promise<boolean> => {
+  try {
+    const ingestedScreenshots = await getIngestedScreenshots();
+    return ingestedScreenshots.some(item => item.content_url === uri);
+  } catch (error) {
+    console.error('Failed to check if screenshot is already ingested:', error);
+    return false;
+  }
+};
+
+/**
+ * Remove all photo_scan items from the database (for cleanup)
+ */
+export const clearAllScreenshots = async (): Promise<number> => {
+  try {
+    const ingestedScreenshots = await getIngestedScreenshots();
+    let deletedCount = 0;
+    
+    for (const item of ingestedScreenshots) {
+      const deleted = await ItemsRepository.delete(item.id);
+      if (deleted) {
+        deletedCount++;
+      }
+    }
+    
+    console.log(`Cleared ${deletedCount} screenshot items from database`);
+    return deletedCount;
+  } catch (error) {
+    console.error('Failed to clear screenshots:', error);
+    throw error;
+  }
+};

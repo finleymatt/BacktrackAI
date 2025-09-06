@@ -78,3 +78,77 @@ VERIFY
 - .gitignore file excludes all necessary Expo/React Native files.
 - First commit is made with all project files.
 - Remote repository is connected and code is pushed to GitHub.
+
+2) Local data layer (MMKV or SQLite)
+
+Prompt
+
+CONTEXT
+- We need local-first storage for Items, Folders, Tags, and a Memories index.
+
+TASK
+Implement a local data module:
+- Choose expo-sqlite (recommended) with a small wrapper.
+- Define tables: users (local shadow), items, folders, item_folders, tags, item_tags.
+- Include created_at, ingested_at, source ('shared_url' | 'photo_scan').
+
+DELIVERABLES
+- src/data/db.ts (init + migrations)
+- src/data/models.ts (TypeScript types)
+- src/data/repositories/* (CRUD helpers)
+- A simple seed function behind a dev-only command.
+
+CONSTRAINTS
+- Migrations versioned in code.
+- No blocking UI on DB init.
+
+VERIFY
+- Home screen shows count of items/folders from local DB.
+
+3) Backend: Supabase (auth + storage + optional vectors)
+
+Prompt
+
+CONTEXT
+- We want simple cloud sync and optional semantic search later.
+
+TASK
+Set up Supabase client + schema script (SQL):
+- Tables to mirror local: users, items, folders, item_folders, tags, item_tags.
+- Policies: row-level security per user_id.
+- Optional pgvector extension and items_embedding vector column.
+
+DELIVERABLES
+- src/lib/supabase.ts
+- /supabase/schema.sql (items, folders, joins, tags, optional pgvector)
+- Docs: /docs/SUPABASE_SETUP.md with step-by-step dashboard instructions.
+
+CONSTRAINTS
+- Don’t break Expo Go.
+- Put keys in .env and load via expo-constants or react-native-dotenv.
+
+VERIFY
+- Add a “Sync now” button (dev-only) that upserts items/folders.
+4) Permissions + Photos scan (detect screenshots)
+
+Prompt
+
+CONTEXT
+- Need user-consented Photos access and a one-shot scan in Add screen.
+
+TASK
+Implement a Photos scanning utility using expo-media-library:
+- Request permission with clear rationale.
+- Enumerate recent images and detect likely Instagram screenshots via heuristics: filename matches ("IMG_*", "Screenshot"), aspect ratios common to Reels, presence of Instagram UI bands (basic pixel heuristics placeholder).
+- Extract basic EXIF created time.
+
+DELIVERABLES
+- src/features/ingest/photosScan.ts
+- AddScreen: "Scan Screenshots" button that ingests N sample items into local DB (source='photo_scan').
+
+CONSTRAINTS
+- Keep heuristics modular (plug in OCR later).
+- Handle denied permission gracefully.
+
+VERIFY
+- After scan, Home shows new items count.
