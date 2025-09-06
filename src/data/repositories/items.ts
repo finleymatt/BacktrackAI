@@ -8,6 +8,8 @@ export interface CreateItemData {
   content_url?: string;
   thumbnail_url?: string;
   source: Source;
+  ocr_text?: string;
+  ocr_done?: boolean;
 }
 
 export interface UpdateItemData {
@@ -15,6 +17,8 @@ export interface UpdateItemData {
   description?: string;
   content_url?: string;
   thumbnail_url?: string;
+  ocr_text?: string;
+  ocr_done?: boolean;
 }
 
 export class ItemsRepository {
@@ -27,14 +31,15 @@ export class ItemsRepository {
     const item: Item = {
       id,
       ...data,
+      ocr_done: data.ocr_done ?? false,
       created_at: now,
       ingested_at: now,
       updated_at: now,
     };
 
     await db.runAsync(
-      `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, created_at, ingested_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, ocr_text, ocr_done, created_at, ingested_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         item.id,
         item.title,
@@ -42,6 +47,8 @@ export class ItemsRepository {
         item.content_url || null,
         item.thumbnail_url || null,
         item.source,
+        item.ocr_text || null,
+        item.ocr_done ? 1 : 0,
         item.created_at,
         item.ingested_at,
         item.updated_at,
@@ -86,16 +93,16 @@ export class ItemsRepository {
     return results;
   }
 
-  // Search items by title or description
+  // Search items by title, description, or OCR text
   static async search(query: string, limit: number = 50, offset: number = 0): Promise<Item[]> {
     const db = await getDatabase();
     const searchTerm = `%${query}%`;
     const results = await db.getAllAsync<Item>(
       `SELECT * FROM ${TABLES.ITEMS} 
-       WHERE title LIKE ? OR description LIKE ? 
+       WHERE title LIKE ? OR description LIKE ? OR ocr_text LIKE ? 
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`,
-      [searchTerm, searchTerm, limit, offset]
+      [searchTerm, searchTerm, searchTerm, limit, offset]
     );
     return results;
   }
@@ -124,6 +131,14 @@ export class ItemsRepository {
     if (data.thumbnail_url !== undefined) {
       updates.push('thumbnail_url = ?');
       values.push(data.thumbnail_url);
+    }
+    if (data.ocr_text !== undefined) {
+      updates.push('ocr_text = ?');
+      values.push(data.ocr_text);
+    }
+    if (data.ocr_done !== undefined) {
+      updates.push('ocr_done = ?');
+      values.push(data.ocr_done ? 1 : 0);
     }
 
     if (updates.length === 0) {
@@ -180,5 +195,31 @@ export class ItemsRepository {
        WHERE created_at >= datetime('now', '-${days} days')`
     );
     return result?.count || 0;
+  }
+
+  // Get items that need OCR processing
+  static async getItemsNeedingOcr(limit: number = 50): Promise<Item[]> {
+    const db = await getDatabase();
+    const results = await db.getAllAsync<Item>(
+      `SELECT * FROM ${TABLES.ITEMS} 
+       WHERE ocr_done = 0 AND content_url IS NOT NULL 
+       ORDER BY created_at DESC 
+       LIMIT ?`,
+      [limit]
+    );
+    return results;
+  }
+
+  // Get items with OCR text
+  static async getItemsWithOcr(limit: number = 50, offset: number = 0): Promise<Item[]> {
+    const db = await getDatabase();
+    const results = await db.getAllAsync<Item>(
+      `SELECT * FROM ${TABLES.ITEMS} 
+       WHERE ocr_done = 1 AND ocr_text IS NOT NULL AND ocr_text != '' 
+       ORDER BY created_at DESC 
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+    return results;
   }
 }

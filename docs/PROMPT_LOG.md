@@ -152,3 +152,27 @@ CONSTRAINTS
 
 VERIFY
 - After scan, Home shows new items count.
+
+5) OCR pipeline (turn screenshots into searchable notes)
+CONTEXT
+- Screenshots may contain valuable text: article excerpts, video titles, Spotify track names, captions, etc.
+- Need OCR to make them searchable and categorizable.
+
+TASK
+Add an OCR module with two modes:
+- Mode A (demo, Expo Go): mock/cloud OCR placeholder.
+- Mode B (Dev Client): integrate expo-text-recognition or similar OCR.
+- Extract visible text into item.ocr_text.
+
+DELIVERABLES
+- src/features/ingest/ocr.ts
+- Flag to toggle OCR on/off.
+- Wire OCR into photosScan ingestion.
+
+CONSTRAINTS
+- Don’t block UI; process in background.
+- Store status (ocr_done, ocr_text).
+
+VERIFY
+- ItemDetail shows extracted text snippet.
+- Searching text finds items based on OCR content.

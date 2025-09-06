@@ -17,6 +17,8 @@ export interface Item {
   content_url?: string;
   thumbnail_url?: string;
   source: Source;
+  ocr_text?: string;
+  ocr_done: boolean;
   created_at: string;
   ingested_at: string;
   updated_at: string;
@@ -53,7 +55,7 @@ export interface ItemTag {
 }
 
 // Database schema version for migrations
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 // Table names
 export const TABLES = {
