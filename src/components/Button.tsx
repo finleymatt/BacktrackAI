@@ -30,11 +30,11 @@ export const Button: React.FC<ButtonProps> = ({
     styles.base,
     styles[variant],
     styles[size],
-    fullWidth && styles.fullWidth,
-    disabled && styles.disabled,
+    ...(fullWidth ? [styles.fullWidth] : []),
+    ...(disabled ? [styles.disabled] : []),
     { backgroundColor: getBackgroundColor(variant, theme.colors) },
     { borderColor: getBorderColor(variant, theme.colors) },
-    style,
+    ...(style ? [style] : []),
   ];
 
   const textColor = getTextColor(variant, theme.colors);

@@ -27,6 +27,10 @@
     },
     "plugins": [
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "supabaseUrl": "https://gnuxsarkpxaozpkycppv.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdudXhzYXJrcHhhb3pwa3ljcHB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxMzQwMDYsImV4cCI6MjA3MjcxMDAwNn0.AG20X8JjuiOpDSAfsInB_JiJTZtuD1Jhs3B1Vsg1IJo"
+    }
   }
 }
