@@ -19,6 +19,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Debug logging
+console.log('Supabase URL:', supabaseUrl);
+console.log('Supabase Key (first 20 chars):', supabaseAnonKey?.substring(0, 20) + '...');
+
 // Database types matching our local models
 export interface Database {
   public: {
