@@ -96,6 +96,26 @@ export function validateMemoriesSettings(settings: MemoriesSettings): string[] {
     errors.push('Allow fallback must be a boolean');
   }
 
+  // Validate notifications
+  if (typeof settings.notifications.enabled !== 'boolean') {
+    errors.push('Notifications enabled must be a boolean');
+  }
+
+  if (settings.notifications.weeklyDay !== undefined) {
+    if (settings.notifications.weeklyDay < 0 || settings.notifications.weeklyDay > 6) {
+      errors.push('Weekly day must be between 0 and 6');
+    }
+  }
+
+  if (settings.notifications.weeklyTime) {
+    if (settings.notifications.weeklyTime.hour < 0 || settings.notifications.weeklyTime.hour > 23) {
+      errors.push('Weekly time hour must be between 0 and 23');
+    }
+    if (settings.notifications.weeklyTime.minute < 0 || settings.notifications.weeklyTime.minute > 59) {
+      errors.push('Weekly time minute must be between 0 and 59');
+    }
+  }
+
   return errors;
 }
 
@@ -136,6 +156,13 @@ export function getMemoriesSettingsDescription(settings: MemoriesSettings): stri
     parts.push('Uses ingestion date as fallback');
   }
 
+  // Notifications
+  if (settings.notifications.enabled) {
+    parts.push('Notifications enabled');
+  } else {
+    parts.push('Notifications disabled');
+  }
+
   return parts.join(' • ');
 }
 
@@ -156,5 +183,10 @@ export function createTestMemoriesSettings(): MemoriesSettings {
       monthly: 3,
     },
     allowFallback: true, // Allow fallback for testing
+    notifications: {
+      enabled: true,
+      weeklyDay: 1,
+      weeklyTime: { hour: 9, minute: 0 },
+    },
   };
 }

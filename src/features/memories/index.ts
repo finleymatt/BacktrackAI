@@ -4,3 +4,4 @@ export * from './settings';
 export * from './memoriesTest';
 export * from './memoriesHooks';
 export * from './debugMemories';
+export * from './notify';

@@ -293,3 +293,53 @@ VERIFY
 - Scan Screenshots imports 50 recent screenshots and shows “(OCR pending)” in item details or count.
 - Pressing “Process screenshot OCR” runs in batches, updates items to ocr_status="done", and displays a final toast with processed/remaining counts.
 - Re-pressing the button when no pending items shows “No pending screenshots to process.”
+
+
+10) Memories / Source-date resurfacing (yearly + month intervals)
+CONTEXT
+- Memories should resurface items based on the ORIGINAL SOURCE DATE (source_date), not ingestion.
+  • Screenshots → Photos EXIF created_at
+  • YouTube/Instagram → saved_at from platform APIs
+  • Spotify/Facebook/Edge → bookmark/save date once integrated
+- Trigger patterns:
+  1) Yearly “On This Day” (same month/day in prior years, with ±7d window)
+  2) Month intervals at 2, 4, 6, 8, 10 months ago (same day-of-month, with ±3d window; handle month-end gracefully)
+
+TASK
+Implement a Memories selector using source_date:
+1) Compute candidate windows for:
+   - Yearly: for each prior year Y where Y < current year, window = [today-7d, today+7d] but with year replaced by Y.
+   - Months: for M ∈ {2,4,6,8,10}, window = [today shifted by -M months] ±3d; if the original day doesn’t exist (e.g., Feb 30), clamp to last day of month.
+2) Query items whose source_date falls in any of the windows.
+3) Group results by “pattern” (Yearly vs 2m/4m/6m/8m/10m) and by year/month for display.
+4) Settings:
+   - cadence: "daily" | "weekly"
+   - quiet_hours: { start, end }
+   - include_private: boolean (default false)
+   - include_intervals: { yearly: true, months_2_4_6_8_10: true } (toggle month intervals on/off)
+   - window_days: { yearly: 7, monthly: 3 } (make configurable)
+5) UI:
+   - MemoriesScreen shows chips/tabs for “Yearly” and “Months Ago”
+   - Cards list with actions: Snooze (X days), Dismiss, “Show fewer like this”, “Add to Folder”, Share
+
+DELIVERABLES
+- src/features/memories/selectMemories.ts
+  • function getMemoriesWindows(today, settings): DateRange[]
+  • function selectMemories(windows): Promise<MemoryItem[]>
+  • Month-end clamp helper and window union/deduplication
+- src/features/memories/settings.ts (types + defaults + persistence)
+- MemoriesScreen wired to selector; grouped sections + actions
+
+CONSTRAINTS
+- Index source_date in local DB for fast range queries
+- Items without source_date: exclude, or fallback to ingested_at with a flag (settings.allow_fallback = false by default)
+- Make it easy to inject platform-specific save dates when integrations land
+
+VERIFY
+- Seed data:
+  • Screenshot taken exactly 6 months ago → appears under “6 months ago”
+  • Instagram saved on this date 3 years ago → appears under “On This Day (3y)”
+  • Edge bookmark saved ~+2 days around target date → appears due to ±3d monthly window
+
+
+  

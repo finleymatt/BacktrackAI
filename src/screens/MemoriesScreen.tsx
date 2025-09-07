@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Text, Card, ItemDetail, ItemCard, InstagramPreview, YouTubePreview, UrlPreview, Button } from '../components';
 import { useTheme } from '../theme/ThemeContext';
 import { ItemsRepository } from '../data/repositories/items';
@@ -14,7 +15,10 @@ import {
   loadMemoriesSettings,
   saveMemoriesSettings,
   debugMemoriesData,
-  createTestMemoriesData
+  createTestMemoriesData,
+  triggerMemoriesTestNow,
+  requestNotificationPermissions,
+  areNotificationsEnabled
 } from '../features/memories';
 
 type TabType = 'yearly' | 'monthly';
@@ -30,10 +34,31 @@ export const MemoriesScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('yearly');
   const [settings, setSettings] = useState<MemoriesSettings | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   useEffect(() => {
     loadMemories();
+    checkNotificationStatus();
+    checkNotificationFilter();
   }, []);
+
+  const checkNotificationFilter = async () => {
+    try {
+      const filter = await AsyncStorage.getItem('memories_notification_filter');
+      if (filter && (filter === 'yearly' || filter === 'monthly')) {
+        setActiveTab(filter);
+        // Clear the filter after using it
+        await AsyncStorage.removeItem('memories_notification_filter');
+      }
+    } catch (error) {
+      console.error('Error checking notification filter:', error);
+    }
+  };
+
+  const checkNotificationStatus = async () => {
+    const enabled = await areNotificationsEnabled();
+    setNotificationsEnabled(enabled);
+  };
 
   const loadMemories = async () => {
     try {
@@ -110,6 +135,37 @@ export const MemoriesScreen: React.FC = () => {
   const showFewerLikeThis = async (memory: MemoryItem) => {
     // TODO: Implement "show fewer like this" logic
     console.log(`Show fewer like this: ${memory.id}`);
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      if (!notificationsEnabled) {
+        const granted = await requestNotificationPermissions();
+        if (!granted) {
+          Alert.alert(
+            'Permission Required',
+            'Please enable notifications in your device settings to test notifications.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        setNotificationsEnabled(true);
+      }
+      
+      await triggerMemoriesTestNow();
+      Alert.alert(
+        'Test Notification',
+        'Test notification sent! Check your notification panel.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error testing notification:', error);
+      Alert.alert(
+        'Error',
+        'Failed to send test notification. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const renderMemoryItem = ({ item }: { item: MemoryItem }) => {
@@ -331,6 +387,11 @@ export const MemoriesScreen: React.FC = () => {
                 title="Create Test Data"
                 variant="primary"
                 onPress={() => createTestMemoriesData().then(() => loadMemories())}
+              />
+              <Button
+                title="Test Notification"
+                variant="secondary"
+                onPress={handleTestNotification}
               />
             </View>
           </Card>

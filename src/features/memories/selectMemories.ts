@@ -32,6 +32,11 @@ export interface MemoriesSettings {
     monthly: number;
   };
   allowFallback: boolean; // Use ingested_at if source_date is missing
+  notifications: {
+    enabled: boolean;
+    weeklyDay?: number; // 0-6 (Sunday-Saturday) for weekly cadence
+    weeklyTime?: { hour: number; minute: number }; // For weekly cadence
+  };
 }
 
 export const DEFAULT_MEMORIES_SETTINGS: MemoriesSettings = {
@@ -47,6 +52,11 @@ export const DEFAULT_MEMORIES_SETTINGS: MemoriesSettings = {
     monthly: 3,
   },
   allowFallback: false,
+  notifications: {
+    enabled: true,
+    weeklyDay: 1, // Monday
+    weeklyTime: { hour: 9, minute: 0 },
+  },
 };
 
 /**
