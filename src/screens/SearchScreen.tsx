@@ -1,45 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, TextInput, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Card, ItemDetail, ItemCard, InstagramPreview, YouTubePreview, UrlPreview } from '../components';
+import { Text, Card, ItemDetail, ItemCard, InstagramPreview, YouTubePreview, UrlPreview, SearchFiltersComponent } from '../components';
 import { useTheme } from '../theme/ThemeContext';
-import { ItemsRepository } from '../data/repositories/items';
+import { useSearch } from '../features/search';
 import { Item, Platform } from '../data/models';
 
 export const SearchScreen: React.FC = () => {
   const { theme } = useTheme();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Item[]>([]);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-
-  // Search function
-  const performSearch = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const results = await ItemsRepository.search(query, 20);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Search failed:', error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // Debounced search
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      performSearch(searchQuery);
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+  
+  // Use the new search hook
+  const {
+    query,
+    setQuery,
+    filters,
+    setFilters,
+    results: searchResults,
+    isLoading: isSearching,
+    error,
+    clearSearch,
+    clearFilters,
+    availableFilters,
+  } = useSearch({ debounceMs: 300, defaultLimit: 50 });
 
   const renderSearchResult = ({ item }: { item: Item }) => {
     // Use platform-specific preview for URL items
@@ -107,17 +90,32 @@ export const SearchScreen: React.FC = () => {
             borderColor: theme.colors.border,
             color: theme.colors.text 
           }]}
-          placeholder="Search items, descriptions, or OCR text..."
+          placeholder="Search items, descriptions, OCR text, domains, or tags..."
           placeholderTextColor={theme.colors.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          value={query}
+          onChangeText={setQuery}
         />
 
-        {searchQuery ? (
+        <SearchFiltersComponent
+          filters={filters}
+          availableFilters={availableFilters}
+          onFiltersChange={setFilters}
+          onClearFilters={clearFilters}
+        />
+
+        {query || Object.keys(filters).length > 0 ? (
           <View style={styles.resultsContainer}>
             <Text variant="h3" style={styles.resultsTitle}>
               {isSearching ? 'Searching...' : `Results (${searchResults.length})`}
             </Text>
+            
+            {error && (
+              <Card style={styles.errorCard}>
+                <Text variant="body" style={styles.errorText}>
+                  {error}
+                </Text>
+              </Card>
+            )}
             
             {searchResults.length > 0 ? (
               <FlatList
@@ -137,10 +135,10 @@ export const SearchScreen: React.FC = () => {
                   index,
                 })}
               />
-            ) : !isSearching ? (
+            ) : !isSearching && !error ? (
               <Card style={styles.noResultsCard}>
                 <Text variant="body" style={styles.noResultsText}>
-                  No items found matching "{searchQuery}"
+                  {query ? `No items found matching "${query}"` : 'No items match the selected filters'}
                 </Text>
               </Card>
             ) : null}
@@ -229,6 +227,15 @@ const styles = StyleSheet.create({
   },
   noResultsText: {
     textAlign: 'center',
+  },
+  errorCard: {
+    marginTop: 16,
+    backgroundColor: '#FFE6E6',
+    borderColor: '#FF3B30',
+  },
+  errorText: {
+    textAlign: 'center',
+    color: '#FF3B30',
   },
   header: {
     padding: 16,
