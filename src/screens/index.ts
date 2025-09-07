@@ -5,3 +5,4 @@ export { FoldersScreen } from './FoldersScreen';
 export { FolderDetailScreen } from './FolderDetailScreen';
 export { ProfileScreen } from './ProfileScreen';
 export { MemoriesScreen } from './MemoriesScreen';
+export { PrivacyScreen } from './PrivacyScreen';

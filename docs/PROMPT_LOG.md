@@ -407,3 +407,24 @@ CONSTRAINTS
 
 VERIFY
 - Searching "music track" finds Spotify screenshot.
+13) Privacy & compliance screen
+CONTEXT
+- We’re capturing screenshots + URLs, and eventually integrating APIs (Instagram, YouTube, Spotify, Facebook, Edge).
+- Must clearly explain to user what is stored, why, and how to delete/export.
+
+TASK
+Create Privacy screen:
+- Explain what data we collect.
+- Explain permissions (Photos, Notifications).
+- Explain current integrations and future roadmap.
+- Export/Delete data controls.
+
+DELIVERABLES
+- src/screens/PrivacyScreen.tsx
+- Link in Profile tab.
+
+CONSTRAINTS
+- Plain, transparent wording.
+
+VERIFY
+- Privacy screen opens with clear sections.

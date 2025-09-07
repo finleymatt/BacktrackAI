@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Text, Card, Button } from '../components';
 import { useTheme } from '../theme/ThemeContext';
 import { signInWithEmail, signUpWithEmail, signOut, supabase } from '../lib/supabase';
@@ -18,6 +19,7 @@ import {
 
 export const ProfileScreen: React.FC = () => {
   const { theme } = useTheme();
+  const navigation = useNavigation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{
@@ -350,6 +352,10 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
+  const handleOpenPrivacy = () => {
+    navigation.navigate('Privacy' as never);
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.content}>
@@ -361,6 +367,25 @@ export const ProfileScreen: React.FC = () => {
           <Text variant="body" style={styles.description}>
             Manage your profile settings, preferences, and account information. Customize your experience and privacy settings.
           </Text>
+        </Card>
+
+        {/* Privacy & Data Section */}
+        <Card style={styles.card}>
+          <Text variant="h3" style={styles.sectionTitle}>
+            Privacy & Data
+          </Text>
+          
+          <Text variant="body" style={styles.statusText}>
+            Learn about what data we collect, how we use it, and your rights to control it.
+          </Text>
+
+          <Button
+            title="View Privacy Policy"
+            onPress={handleOpenPrivacy}
+            variant="outline"
+            size="small"
+            style={styles.privacyButton}
+          />
         </Card>
 
         {/* Memories Notifications Settings */}
@@ -538,6 +563,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   scheduledButton: {
+    marginBottom: 8,
+  },
+  privacyButton: {
+    marginTop: 8,
     marginBottom: 8,
   },
 });
