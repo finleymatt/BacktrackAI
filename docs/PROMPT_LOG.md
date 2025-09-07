@@ -200,3 +200,27 @@ CONSTRAINTS
 
 VERIFY
 - Paste a URL, save → item appears in Home with metadata.
+
+🎨 Updated Preview Components:
+Key Design Changes:
+Rounded Bubble Design - Clean rounded corners (12px radius) with subtle shadows
+Better Thumbnails - Larger 100x100px thumbnails with proper aspect ratios
+Play Button Overlays - Semi-transparent circular play buttons for video content
+iOS-Style Colors - Light gray backgrounds (#F8F9FA) with proper contrast
+Clean Typography - Better font weights and spacing matching iOS design
+Footer Styling - Gray footer bars with domain names (like "instagram.com", "youtu.be")
+Instagram Preview:
+✅ Instagram pink placeholder with camera icon
+✅ Play button overlay for video content
+✅ Clean title and description layout
+✅ "instagram.com" footer
+YouTube Preview:
+✅ YouTube red placeholder with play icon
+✅ Play button overlay for video thumbnails
+✅ Multi-line title support (3 lines)
+✅ "youtu.be" footer
+Generic URL Preview:
+✅ Platform-specific colors and icons
+✅ Smart domain extraction (removes "www.")
+✅ Fallback to platform colors when no thumbnail
+✅ Clean web link styling
