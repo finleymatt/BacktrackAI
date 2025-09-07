@@ -1,6 +1,8 @@
 // Database models and TypeScript types for local-first storage
 
-export type Source = 'shared_url' | 'photo_scan' | 'url';
+export type Source = 'shared_url' | 'photo_scan' | 'url' | 'screenshot';
+
+export type OcrStatus = 'pending' | 'done' | 'error';
 
 export type Platform = 'youtube' | 'spotify' | 'instagram' | 'generic';
 
@@ -20,8 +22,10 @@ export interface Item {
   thumbnail_url?: string;
   source: Source;
   platform?: Platform;
+  source_date?: string; // For screenshots, this is the creation time from Photos EXIF
   ocr_text?: string;
-  ocr_done: boolean;
+  ocr_done: boolean; // Legacy field - kept for backward compatibility
+  ocr_status?: OcrStatus; // New field for tracking OCR processing status
   created_at: string;
   ingested_at: string;
   updated_at: string;
@@ -59,7 +63,7 @@ export interface ItemTag {
 }
 
 // Database schema version for migrations
-export const DB_VERSION = 4;
+export const DB_VERSION = 6;
 
 // Table names
 export const TABLES = {

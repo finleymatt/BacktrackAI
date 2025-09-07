@@ -20,7 +20,11 @@ export const MemoriesScreen: React.FC = () => {
     try {
       setLoading(true);
       const allItems = await ItemsRepository.getAll(50, 0);
-      setItems(allItems);
+      // Filter out items with no meaningful content
+      const filteredItems = allItems.filter(item => 
+        item.title || item.description || item.ocr_text || item.content_url
+      );
+      setItems(filteredItems);
     } catch (error) {
       console.error('Failed to load items:', error);
     } finally {
@@ -102,6 +106,16 @@ export const MemoriesScreen: React.FC = () => {
             style={styles.itemsList}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.itemsListContent}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            initialNumToRender={10}
+            windowSize={10}
+            getItemLayout={(data, index) => ({
+              length: 100, // Approximate item height
+              offset: 100 * index,
+              index,
+            })}
           />
         ) : (
           <Card style={styles.card}>

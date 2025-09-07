@@ -12,70 +12,54 @@ interface ItemDetailProps {
 export const ItemDetail: React.FC<ItemDetailProps> = ({ item }) => {
   const { theme } = useTheme();
 
+  // Don't render if item has no meaningful content
+  const hasContent = item.title || item.description || item.ocr_text || item.content_url;
+  if (!hasContent) {
+    return null;
+  }
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Card style={styles.card}>
-        <Text variant="h2" style={styles.title}>
-          {item.title}
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.card}>
+        <Text variant="h3" style={styles.title} numberOfLines={2}>
+          {item.title || 'Untitled Item'}
         </Text>
         
         {item.description && (
-          <Text variant="body" style={styles.description}>
+          <Text variant="bodySmall" style={styles.description} numberOfLines={3}>
             {item.description}
           </Text>
         )}
 
-        {item.content_url && (
-          <View style={styles.urlContainer}>
-            <Text variant="bodySmall" style={styles.urlLabel}>
-              Link:
+        {item.ocr_text && (
+          <View style={styles.ocrContainer}>
+            <Text variant="caption" style={styles.ocrLabel}>
+              OCR Text:
             </Text>
-            <Text variant="bodySmall" style={[styles.urlText, { color: theme.colors.primary }]}>
-              {item.content_url}
+            <Text variant="bodySmall" style={styles.ocrText} numberOfLines={2}>
+              {item.ocr_text}
             </Text>
           </View>
         )}
 
         <View style={styles.metaContainer}>
           <Text variant="caption" style={styles.metaText}>
-            Source: {item.source}
+            {item.source}
           </Text>
           {item.platform && (
             <Text variant="caption" style={styles.metaText}>
-              Platform: {item.platform}
+              • {item.platform}
             </Text>
           )}
           <Text variant="caption" style={styles.metaText}>
-            Created: {new Date(item.created_at).toLocaleDateString()}
+            • {new Date(item.created_at).toLocaleDateString()}
           </Text>
           <Text variant="caption" style={styles.metaText}>
-            OCR Status: {item.ocr_done ? '✅ Completed' : '⏳ Pending'}
+            • {item.ocr_done ? '✅' : '⏳'}
           </Text>
         </View>
-      </Card>
-
-      {item.ocr_text && (
-        <Card style={styles.card}>
-          <Text variant="h3" style={styles.sectionTitle}>
-            Extracted Text
-          </Text>
-          <Text variant="body" style={styles.ocrText}>
-            {item.ocr_text}
-          </Text>
-        </Card>
-      )}
-
-      {item.content_url && (
-        <Card style={styles.card}>
-          <Text variant="h3" style={styles.sectionTitle}>
-            Content
-          </Text>
-          <Text variant="caption" style={styles.urlText}>
-            {item.content_url}
-          </Text>
-        </Card>
-      )}
-    </ScrollView>
+      </View>
+    </View>
   );
 };
 
@@ -84,46 +68,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   card: {
-    margin: 16,
-    marginBottom: 8,
+    padding: 12,
   },
   title: {
-    marginBottom: 8,
+    marginBottom: 6,
+    fontWeight: '600',
   },
   description: {
-    marginBottom: 12,
+    marginBottom: 8,
     opacity: 0.8,
+    lineHeight: 16,
   },
-  urlContainer: {
-    marginBottom: 12,
+  ocrContainer: {
+    marginBottom: 8,
     padding: 8,
     backgroundColor: 'rgba(0, 0, 0, 0.05)',
     borderRadius: 6,
   },
-  urlLabel: {
+  ocrLabel: {
     marginBottom: 4,
     fontWeight: '500',
+    opacity: 0.7,
+  },
+  ocrText: {
+    lineHeight: 16,
+    opacity: 0.8,
   },
   metaContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
   },
   metaText: {
     opacity: 0.6,
-  },
-  sectionTitle: {
-    marginBottom: 12,
-  },
-  ocrText: {
-    lineHeight: 20,
-    fontFamily: 'monospace',
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    padding: 12,
-    borderRadius: 8,
-  },
-  urlText: {
-    fontFamily: 'monospace',
-    opacity: 0.7,
+    fontSize: 11,
   },
 });

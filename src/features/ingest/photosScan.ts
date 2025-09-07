@@ -59,6 +59,10 @@ export const isScreenshot = (asset: MediaLibrary.Asset): boolean => {
     'snapshot',
     'img_', // Common Android pattern
     'photo_', // Common iOS pattern with timestamp
+    'screenshot_', // Common pattern
+    'screen_', // Common pattern
+    'scrn_', // Abbreviated
+    'scr_', // Abbreviated
   ];
   
   const hasScreenshotFilename = screenshotPatterns.some(pattern => 
@@ -74,10 +78,12 @@ export const isScreenshot = (asset: MediaLibrary.Asset): boolean => {
     20/9,    // 2.22 - Ultra-wide phones
     4/3,     // 1.33 - iPad/older devices
     3/2,     // 1.5 - Some tablets
+    21/9,    // 2.33 - Ultra-wide
+    18.5/9,  // 2.06 - Some modern phones
   ];
   
   const hasScreenAspectRatio = commonScreenRatios.some(ratio => 
-    Math.abs(aspectRatio - ratio) < 0.1 // Allow 10% tolerance
+    Math.abs(aspectRatio - ratio) < 0.15 // Allow 15% tolerance
   );
 
   // Heuristic 3: Creation time (screenshots are usually recent)
@@ -87,23 +93,29 @@ export const isScreenshot = (asset: MediaLibrary.Asset): boolean => {
 
   // Heuristic 4: Exclude obvious non-screenshots
   const isObviousPhoto = filename.includes('dsc') || // Digital camera photos
-                        filename.includes('img') || // Generic image
-                        filename.includes('photo') || // Explicit photo
                         filename.includes('camera') || // Camera app
                         filename.includes('snapchat') || // Social media
                         filename.includes('instagram') ||
                         filename.includes('whatsapp') ||
-                        filename.includes('telegram');
+                        filename.includes('telegram') ||
+                        filename.includes('facebook') ||
+                        filename.includes('twitter') ||
+                        filename.includes('tiktok');
+
+  // Heuristic 5: File size (screenshots are usually smaller than photos)
+  const isReasonableSize = asset.width > 100 && asset.height > 100 && 
+                          asset.width < 5000 && asset.height < 5000;
 
   // Combine heuristics with weighted scoring
   let score = 0;
-  if (hasScreenshotFilename) score += 4; // Increased weight for filename
-  if (hasScreenAspectRatio) score += 2;
-  if (isRecent) score += 1;
-  if (isObviousPhoto) score -= 3; // Strong penalty for obvious photos
+  if (hasScreenshotFilename) score += 5; // Increased weight for filename
+  if (hasScreenAspectRatio) score += 3; // Increased weight for aspect ratio
+  if (isRecent) score += 2; // Increased weight for recent
+  if (isReasonableSize) score += 1; // Bonus for reasonable size
+  if (isObviousPhoto) score -= 4; // Strong penalty for obvious photos
 
-  // Consider it a screenshot if score >= 4 (increased threshold)
-  return score >= 4;
+  // Consider it a screenshot if score >= 3 (lowered threshold)
+  return score >= 3;
 };
 
 /**
@@ -235,6 +247,29 @@ export const createItemFromScreenshot = async (candidate: ScreenshotCandidate): 
 };
 
 /**
+ * Create a screenshot item with pending OCR status (new workflow)
+ */
+export const createScreenshotItem = async (candidate: ScreenshotCandidate): Promise<Item> => {
+  const title = `Screenshot - ${new Date(candidate.creationTime * 1000).toLocaleDateString()}`;
+  const description = `Captured screenshot from ${candidate.filename}`;
+  const sourceDate = new Date(candidate.creationTime * 1000).toISOString();
+
+  // Create item with pending OCR status
+  const item = await ItemsRepository.create({
+    title,
+    description,
+    content_url: candidate.uri,
+    thumbnail_url: candidate.uri, // Use the same URI for thumbnail
+    source: 'screenshot',
+    source_date: sourceDate,
+    ocr_done: false, // Legacy field
+    ocr_status: 'pending', // New field for OCR workflow
+  });
+
+  return item;
+};
+
+/**
  * Main function to scan for screenshots and ingest them into the database
  */
 export const scanAndIngestScreenshots = async (): Promise<ScreenshotDetectionResult> => {
@@ -323,11 +358,124 @@ export const scanAndIngestScreenshots = async (): Promise<ScreenshotDetectionRes
 };
 
 /**
+ * Debug function to show what's in the photo library
+ */
+export const debugPhotoLibrary = async (limit: number = 20): Promise<void> => {
+  try {
+    const hasPermission = await requestPhotosPermission();
+    if (!hasPermission) {
+      console.log('❌ Photos permission denied');
+      return;
+    }
+
+    const recentImages = await getRecentImages(limit);
+    console.log(`📸 Found ${recentImages.length} recent images in photo library:`);
+    
+    recentImages.forEach((img, index) => {
+      const aspectRatio = (img.width / img.height).toFixed(2);
+      const creationDate = new Date(img.creationTime * 1000).toLocaleString();
+      console.log(`${index + 1}. ${img.filename}`);
+      console.log(`   Size: ${img.width}x${img.height} (${aspectRatio})`);
+      console.log(`   Created: ${creationDate}`);
+      console.log(`   URI: ${img.uri}`);
+      console.log('');
+    });
+  } catch (error) {
+    console.error('Failed to debug photo library:', error);
+  }
+};
+
+/**
+ * New simplified function to scan screenshots and ingest them without OCR
+ * This is the main function that should be called from AddScreen
+ */
+export const scanScreenshots = async (limit: number = 50): Promise<string[]> => {
+  try {
+    // Request Photos permission
+    const hasPermission = await requestPhotosPermission();
+    if (!hasPermission) {
+      throw new Error('Photos permission denied by user');
+    }
+
+    // Get recent images
+    const recentImages = await getRecentImages(limit);
+    
+    if (recentImages.length === 0) {
+      console.log('No photos found in your photo library');
+      return [];
+    }
+    
+    // Filter for screenshots
+    const screenshotCandidates = recentImages
+      .filter(isScreenshot)
+      .map(assetToCandidate);
+
+    console.log(`Found ${screenshotCandidates.length} potential screenshots out of ${recentImages.length} recent images`);
+    
+    // Debug: Log some sample filenames to understand what we're working with
+    if (recentImages.length > 0) {
+      console.log('Sample recent image filenames:', recentImages.slice(0, 10).map(img => ({
+        filename: img.filename,
+        width: img.width,
+        height: img.height,
+        aspectRatio: (img.width / img.height).toFixed(2),
+        creationTime: new Date(img.creationTime * 1000).toLocaleString()
+      })));
+    }
+    
+    // Debug: Log the filenames of detected screenshots
+    if (screenshotCandidates.length > 0) {
+      console.log('Detected screenshot filenames:', screenshotCandidates.map(c => ({
+        filename: c.filename,
+        width: c.width,
+        height: c.height,
+        aspectRatio: c.aspectRatio.toFixed(2),
+        creationTime: new Date(c.creationTime * 1000).toLocaleString()
+      })));
+    } else {
+      console.log('No screenshots detected. This might be because:');
+      console.log('1. Your device uses different filename patterns');
+      console.log('2. The aspect ratio detection is too strict');
+      console.log('3. The images are not recent enough');
+      console.log('4. The scoring threshold is too high');
+    }
+
+    const insertedItemIds: string[] = [];
+
+    // Create items for each screenshot (avoiding duplicates)
+    for (const candidate of screenshotCandidates) {
+      try {
+        // Check if this screenshot is already ingested
+        const alreadyIngested = await isScreenshotAlreadyIngested(candidate.uri);
+        if (alreadyIngested) {
+          console.log(`Skipping already ingested screenshot: ${candidate.filename}`);
+          continue;
+        }
+        
+        const item = await createScreenshotItem(candidate);
+        insertedItemIds.push(item.id);
+        console.log(`✅ Successfully created item for ${candidate.filename}`);
+      } catch (error) {
+        console.error(`❌ Failed to create item for ${candidate.filename}:`, error);
+        // Continue processing other items
+      }
+    }
+
+    console.log(`Successfully ingested ${insertedItemIds.length} screenshots`);
+    return insertedItemIds;
+
+  } catch (error) {
+    console.error('Failed to scan screenshots:', error);
+    throw error;
+  }
+};
+
+/**
  * Get screenshots that have already been ingested (to avoid duplicates)
  */
 export const getIngestedScreenshots = async (): Promise<Item[]> => {
   try {
-    return await ItemsRepository.getBySource('photo_scan');
+    return await ItemsRepository.getBySource('screenshot');
   } catch (error) {
     console.error('Failed to get ingested screenshots:', error);
     return [];
@@ -348,7 +496,7 @@ export const isScreenshotAlreadyIngested = async (uri: string): Promise<boolean>
     
     // Check if the file still exists by trying to get its info
     try {
-      const assetInfo = await MediaLibrary.getAssetInfoAsync({ uri });
+        const assetInfo = await MediaLibrary.getAssetInfoAsync({ uri } as any);
       if (!assetInfo || !assetInfo.localUri) {
         // File no longer exists, remove the item from database
         console.log(`Screenshot file no longer exists, removing from database: ${uri}`);
@@ -410,7 +558,7 @@ export const cleanupOrphanedScreenshots = async (): Promise<number> => {
       }
       
       try {
-        const assetInfo = await MediaLibrary.getAssetInfoAsync({ uri: item.content_url });
+        const assetInfo = await MediaLibrary.getAssetInfoAsync({ uri: item.content_url } as any);
         if (!assetInfo || !assetInfo.localUri) {
           // File no longer exists, remove the item
           console.log(`Removing orphaned item: ${item.title} (${item.content_url})`);

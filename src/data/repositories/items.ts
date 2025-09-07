@@ -1,5 +1,5 @@
 import { getDatabase, generateId, getCurrentTimestamp } from '../db';
-import { Item, Source, Platform } from '../models';
+import { Item, Source, Platform, OcrStatus } from '../models';
 import { TABLES } from '../models';
 
 export interface CreateItemData {
@@ -9,8 +9,10 @@ export interface CreateItemData {
   thumbnail_url?: string;
   source: Source;
   platform?: Platform;
+  source_date?: string;
   ocr_text?: string;
   ocr_done?: boolean;
+  ocr_status?: OcrStatus;
 }
 
 export interface UpdateItemData {
@@ -19,8 +21,10 @@ export interface UpdateItemData {
   content_url?: string;
   thumbnail_url?: string;
   platform?: Platform;
+  source_date?: string;
   ocr_text?: string;
   ocr_done?: boolean;
+  ocr_status?: OcrStatus;
 }
 
 export class ItemsRepository {
@@ -40,8 +44,8 @@ export class ItemsRepository {
     };
 
     await db.runAsync(
-      `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, platform, ocr_text, ocr_done, created_at, ingested_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, platform, source_date, ocr_text, ocr_done, ocr_status, created_at, ingested_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         item.id,
         item.title,
@@ -50,8 +54,10 @@ export class ItemsRepository {
         item.thumbnail_url || null,
         item.source,
         item.platform || null,
+        item.source_date || null,
         item.ocr_text || null,
         item.ocr_done ? 1 : 0,
+        item.ocr_status || null,
         item.created_at,
         item.ingested_at,
         item.updated_at,
@@ -139,6 +145,10 @@ export class ItemsRepository {
       updates.push('platform = ?');
       values.push(data.platform);
     }
+    if (data.source_date !== undefined) {
+      updates.push('source_date = ?');
+      values.push(data.source_date);
+    }
     if (data.ocr_text !== undefined) {
       updates.push('ocr_text = ?');
       values.push(data.ocr_text);
@@ -146,6 +156,10 @@ export class ItemsRepository {
     if (data.ocr_done !== undefined) {
       updates.push('ocr_done = ?');
       values.push(data.ocr_done ? 1 : 0);
+    }
+    if (data.ocr_status !== undefined) {
+      updates.push('ocr_status = ?');
+      values.push(data.ocr_status);
     }
 
     if (updates.length === 0) {
@@ -209,8 +223,21 @@ export class ItemsRepository {
     const db = await getDatabase();
     const results = await db.getAllAsync<Item>(
       `SELECT * FROM ${TABLES.ITEMS} 
-       WHERE ocr_done = 0 AND content_url IS NOT NULL 
+       WHERE (ocr_status = 'pending' OR (ocr_status IS NULL AND ocr_done = 0)) AND content_url IS NOT NULL 
        ORDER BY created_at DESC 
+       LIMIT ?`,
+      [limit]
+    );
+    return results;
+  }
+
+  // Get screenshot items that need OCR processing
+  static async getScreenshotItemsNeedingOcr(limit: number = 50): Promise<Item[]> {
+    const db = await getDatabase();
+    const results = await db.getAllAsync<Item>(
+      `SELECT * FROM ${TABLES.ITEMS} 
+       WHERE source = 'screenshot' AND ocr_status = 'pending' AND content_url IS NOT NULL 
+       ORDER BY source_date DESC, created_at DESC 
        LIMIT ?`,
       [limit]
     );

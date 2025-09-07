@@ -3,7 +3,7 @@ import { View, StyleSheet, Alert, ActivityIndicator, ScrollView } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Card, Button, TextInput } from '../components';
 import { useTheme } from '../theme/ThemeContext';
-import { scanAndIngestScreenshots, ScreenshotDetectionResult, clearAllScreenshots } from '../features/ingest/photosScan';
+import { scanScreenshots, clearAllScreenshots } from '../features/ingest/photosScan';
 import { ingestUrl, isValidUrl, getPlatformDisplayName } from '../features/ingest/urlIngest';
 
 export const AddScreen: React.FC = () => {
@@ -17,30 +17,18 @@ export const AddScreen: React.FC = () => {
   const handleScanScreenshots = async () => {
     try {
       setIsScanning(true);
-      const result: ScreenshotDetectionResult = await scanAndIngestScreenshots();
+      const insertedItemIds = await scanScreenshots(50);
       
-      if (result.success) {
-        if (result.itemsCreated > 0) {
-          Alert.alert(
-            'Screenshots Found!',
-            `Successfully found and saved ${result.itemsCreated} screenshots to your collection.`,
-            [{ text: 'OK' }]
-          );
-        } else {
-          Alert.alert(
-            'No Screenshots Found',
-            'No new screenshots were detected in your recent photos. Try taking some screenshots and try again!',
-            [{ text: 'OK' }]
-          );
-        }
-      } else {
-        const errorMessage = result.errors.length > 0 
-          ? result.errors.join('\n')
-          : 'An unknown error occurred while scanning for screenshots.';
-        
+      if (insertedItemIds.length > 0) {
         Alert.alert(
-          'Scan Failed',
-          errorMessage,
+          'Screenshots Imported!',
+          `Successfully imported ${insertedItemIds.length} screenshots (OCR pending). Use the "Process Screenshot OCR" button on the Home screen to extract text from them.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'No New Screenshots Found',
+          'No new screenshots were detected in your recent photos. Try taking some screenshots and try again!',
           [{ text: 'OK' }]
         );
       }

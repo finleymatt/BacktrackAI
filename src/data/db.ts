@@ -41,6 +41,184 @@ export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
   return db;
 };
 
+// Close database connection (for cleanup)
+export const closeDatabase = async (): Promise<void> => {
+  if (db) {
+    try {
+      await db.closeAsync();
+      console.log('Database connection closed');
+    } catch (error) {
+      console.error('Error closing database:', error);
+    } finally {
+      db = null;
+    }
+  }
+};
+
+// Reset database connection (useful for fixing locking issues)
+export const resetDatabaseConnection = async (): Promise<SQLite.SQLiteDatabase> => {
+  await closeDatabase();
+  return await initDatabase();
+};
+
+// Force reset database (nuclear option for persistent locking issues)
+export const forceResetDatabase = async (): Promise<void> => {
+  try {
+    console.log('🔄 Force resetting database...');
+    await closeDatabase();
+    
+    // Delete the database file completely
+    const { deleteAsync, documentDirectory } = await import('expo-file-system');
+    const dbPath = `${documentDirectory}SQLite/backtrack.db`;
+    
+    try {
+      await deleteAsync(dbPath);
+      console.log('✅ Database file deleted');
+    } catch (error) {
+      console.warn('Could not delete database file:', error);
+    }
+    
+    // Reinitialize
+    await initDatabase();
+    console.log('✅ Database force reset complete');
+  } catch (error) {
+    console.error('❌ Force reset failed:', error);
+    throw error;
+  }
+};
+
+// Fix screenshot constraint (dedicated function for this specific issue)
+export const fixScreenshotConstraint = async (): Promise<void> => {
+  try {
+    console.log('🔧 Fixing screenshot constraint...');
+    const database = await getDatabase();
+    
+    // First, check what columns currently exist
+    const tableInfo = await database.getAllAsync(`PRAGMA table_info(${TABLES.ITEMS});`);
+    const existingColumns = tableInfo.map((col: any) => col.name);
+    console.log('Current table columns:', existingColumns);
+    
+    // Test if we can insert a screenshot item with all required columns
+    try {
+      await database.runAsync(
+        `INSERT INTO ${TABLES.ITEMS} (id, title, source, platform, source_date, ocr_done, ocr_status, created_at, ingested_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'test-screenshot-constraint', 
+          'Test Screenshot', 
+          'screenshot', 
+          'generic', 
+          new Date().toISOString(),
+          1, 
+          'pending',
+          new Date().toISOString(), 
+          new Date().toISOString(), 
+          new Date().toISOString()
+        ]
+      );
+      
+      // If successful, clean up and return
+      await database.runAsync(`DELETE FROM ${TABLES.ITEMS} WHERE id = ?`, ['test-screenshot-constraint']);
+      console.log('✅ Screenshot constraint is already working');
+      return;
+    } catch (error) {
+      console.log('❌ Screenshot constraint needs fixing, recreating table...');
+      console.log('Error details:', error);
+    }
+    
+    // Get all existing data
+    const existingItems = await database.getAllAsync(`SELECT * FROM ${TABLES.ITEMS}`);
+    const existingItemFolders = await database.getAllAsync(`SELECT * FROM ${TABLES.ITEM_FOLDERS}`);
+    const existingItemTags = await database.getAllAsync(`SELECT * FROM ${TABLES.ITEM_TAGS}`);
+    
+    console.log(`Backing up ${existingItems.length} items, ${existingItemFolders.length} item-folder relationships, ${existingItemTags.length} item-tag relationships`);
+    
+    // Drop the old table
+    await database.execAsync(`DROP TABLE IF EXISTS ${TABLES.ITEMS}`);
+    
+    // Create the new table with updated constraint
+    await database.execAsync(`
+      CREATE TABLE ${TABLES.ITEMS} (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        content_url TEXT,
+        thumbnail_url TEXT,
+        source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url', 'screenshot')),
+        platform TEXT,
+        source_date TEXT,
+        ocr_text TEXT,
+        ocr_done BOOLEAN NOT NULL DEFAULT 0,
+        ocr_status TEXT CHECK (ocr_status IN ('pending', 'done', 'error')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        ingested_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    
+    // Recreate indexes
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_created_at ON ${TABLES.ITEMS} (created_at);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_source ON ${TABLES.ITEMS} (source);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_platform ON ${TABLES.ITEMS} (platform);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_text ON ${TABLES.ITEMS} (ocr_text);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_done ON ${TABLES.ITEMS} (ocr_done);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_status ON ${TABLES.ITEMS} (ocr_status);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_source_date ON ${TABLES.ITEMS} (source_date);`);
+    
+    // Restore the data
+    for (const item of existingItems) {
+      await database.runAsync(
+        `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, platform, source_date, ocr_text, ocr_done, ocr_status, created_at, ingested_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          (item as any).id,
+          (item as any).title,
+          (item as any).description || null,
+          (item as any).content_url || null,
+          (item as any).thumbnail_url || null,
+          (item as any).source,
+          (item as any).platform || null,
+          (item as any).source_date || null,
+          (item as any).ocr_text || null,
+          (item as any).ocr_done ? 1 : 0,
+          (item as any).ocr_status || null,
+          (item as any).created_at,
+          (item as any).ingested_at,
+          (item as any).updated_at,
+        ]
+      );
+    }
+    
+    // Restore relationships
+    for (const rel of existingItemFolders) {
+      await database.runAsync(
+        `INSERT INTO ${TABLES.ITEM_FOLDERS} (item_id, folder_id, created_at)
+         VALUES (?, ?, ?)`,
+        [(rel as any).item_id, (rel as any).folder_id, (rel as any).created_at]
+      );
+    }
+    
+    for (const rel of existingItemTags) {
+      await database.runAsync(
+        `INSERT INTO ${TABLES.ITEM_TAGS} (item_id, tag_id, created_at)
+         VALUES (?, ?, ?)`,
+        [(rel as any).item_id, (rel as any).tag_id, (rel as any).created_at]
+      );
+    }
+    
+    console.log('✅ Screenshot constraint fixed successfully');
+    
+    // Verify the fix worked
+    const newTableInfo = await database.getAllAsync(`PRAGMA table_info(${TABLES.ITEMS});`);
+    const newColumns = newTableInfo.map((col: any) => col.name);
+    console.log('New table columns:', newColumns);
+    
+  } catch (error) {
+    console.error('❌ Failed to fix screenshot constraint:', error);
+    throw error;
+  }
+};
+
 // Migration system
 const runMigrations = async (database: SQLite.SQLiteDatabase): Promise<void> => {
   // Get current version
@@ -68,6 +246,16 @@ const runMigrations = async (database: SQLite.SQLiteDatabase): Promise<void> => 
     // Migration 4: Add is_public field to folders table
     if (currentVersion < 4) {
       await migration4_addIsPublicToFolders(database);
+    }
+    
+    // Migration 5: Add OCR status and source_date fields to items table
+    if (currentVersion < 5) {
+      await migration5_addOcrStatusAndSourceDate(database);
+    }
+    
+    // Migration 6: Force recreate items table with updated source constraint
+    if (currentVersion < 6) {
+      await migration6_updateSourceConstraint(database);
     }
     
     // Always ensure platform column exists (safety check)
@@ -107,7 +295,7 @@ const migration1_createTables = async (database: SQLite.SQLiteDatabase): Promise
       description TEXT,
       content_url TEXT,
       thumbnail_url TEXT,
-      source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url')),
+      source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url', 'screenshot')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       ingested_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -261,6 +449,57 @@ const migration4_addIsPublicToFolders = async (database: SQLite.SQLiteDatabase):
     console.log('Migration 4 completed: is_public field added to folders table');
   } catch (error) {
     console.error('Migration 4 failed:', error);
+    // Don't throw - let the app continue even if migration fails
+  }
+};
+
+// Migration 5: Add OCR status and source_date fields to items table
+const migration5_addOcrStatusAndSourceDate = async (database: SQLite.SQLiteDatabase): Promise<void> => {
+  console.log('Running migration 5: Adding ocr_status and source_date fields to items table');
+  
+  try {
+    // Check if new columns already exist
+    const tableInfo = await database.getAllAsync(`PRAGMA table_info(${TABLES.ITEMS});`);
+    const existingColumns = tableInfo.map((col: any) => col.name);
+    
+    const migrations = [];
+    
+    // Add ocr_status column if it doesn't exist
+    if (!existingColumns.includes('ocr_status')) {
+      migrations.push(`ALTER TABLE ${TABLES.ITEMS} ADD COLUMN ocr_status TEXT CHECK (ocr_status IN ('pending', 'done', 'error'));`);
+    }
+    
+    // Add source_date column if it doesn't exist
+    if (!existingColumns.includes('source_date')) {
+      migrations.push(`ALTER TABLE ${TABLES.ITEMS} ADD COLUMN source_date TEXT;`);
+    }
+    
+    // Create indexes for new fields
+    migrations.push(`CREATE INDEX IF NOT EXISTS idx_items_ocr_status ON ${TABLES.ITEMS} (ocr_status);`);
+    migrations.push(`CREATE INDEX IF NOT EXISTS idx_items_source_date ON ${TABLES.ITEMS} (source_date);`);
+
+    for (const migration of migrations) {
+      await database.execAsync(migration);
+    }
+    
+    console.log('Migration 5 completed: ocr_status and source_date fields added to items table');
+  } catch (error) {
+    console.error('Migration 5 failed:', error);
+    // Don't throw - let the app continue even if migration fails
+  }
+};
+
+// Migration 6: Force recreate items table with updated source constraint
+const migration6_updateSourceConstraint = async (database: SQLite.SQLiteDatabase): Promise<void> => {
+  console.log('Running migration 6: Updating source constraint to include screenshot');
+  
+  try {
+    // Simply call the existing force recreate function
+    // This will handle the constraint update properly
+    await forceRecreateItemsTableIfNeeded(database);
+    console.log('Migration 6 completed: source constraint updated');
+  } catch (error) {
+    console.error('Migration 6 failed:', error);
     // Don't throw - let the app continue even if migration fails
   }
 };
@@ -462,6 +701,9 @@ const forceRecreateItemsTableIfNeeded = async (database: SQLite.SQLiteDatabase):
       console.log('❌ Items table constraint is wrong, recreating...');
     }
     
+    // Add a small delay to allow any pending operations to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Check if table exists first
     const tableExists = await database.getFirstAsync(
       `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
@@ -478,10 +720,12 @@ const forceRecreateItemsTableIfNeeded = async (database: SQLite.SQLiteDatabase):
           description TEXT,
           content_url TEXT,
           thumbnail_url TEXT,
-          source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url')),
+          source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url', 'screenshot')),
           platform TEXT,
+          source_date TEXT,
           ocr_text TEXT,
           ocr_done BOOLEAN NOT NULL DEFAULT 0,
+          ocr_status TEXT CHECK (ocr_status IN ('pending', 'done', 'error')),
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
           ingested_at TEXT NOT NULL DEFAULT (datetime('now')),
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -494,6 +738,8 @@ const forceRecreateItemsTableIfNeeded = async (database: SQLite.SQLiteDatabase):
       await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_platform ON ${TABLES.ITEMS} (platform);`);
       await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_text ON ${TABLES.ITEMS} (ocr_text);`);
       await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_done ON ${TABLES.ITEMS} (ocr_done);`);
+      await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_status ON ${TABLES.ITEMS} (ocr_status);`);
+      await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_source_date ON ${TABLES.ITEMS} (source_date);`);
       
       console.log('✅ Items table created successfully with correct constraint');
       return;
@@ -507,7 +753,7 @@ const forceRecreateItemsTableIfNeeded = async (database: SQLite.SQLiteDatabase):
     console.log(`Backing up ${existingItems.length} items, ${existingItemFolders.length} item-folder relationships, ${existingItemTags.length} item-tag relationships`);
     
     // Drop the old table
-    await database.execAsync(`DROP TABLE ${TABLES.ITEMS}`);
+    await database.execAsync(`DROP TABLE IF EXISTS ${TABLES.ITEMS}`);
     
     // Create the new table with correct constraint
     await database.execAsync(`
@@ -517,10 +763,12 @@ const forceRecreateItemsTableIfNeeded = async (database: SQLite.SQLiteDatabase):
         description TEXT,
         content_url TEXT,
         thumbnail_url TEXT,
-        source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url')),
+        source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url', 'screenshot')),
         platform TEXT,
+        source_date TEXT,
         ocr_text TEXT,
         ocr_done BOOLEAN NOT NULL DEFAULT 0,
+        ocr_status TEXT CHECK (ocr_status IN ('pending', 'done', 'error')),
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         ingested_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -533,12 +781,14 @@ const forceRecreateItemsTableIfNeeded = async (database: SQLite.SQLiteDatabase):
     await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_platform ON ${TABLES.ITEMS} (platform);`);
     await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_text ON ${TABLES.ITEMS} (ocr_text);`);
     await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_done ON ${TABLES.ITEMS} (ocr_done);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_ocr_status ON ${TABLES.ITEMS} (ocr_status);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_items_source_date ON ${TABLES.ITEMS} (source_date);`);
     
     // Restore the data
     for (const item of existingItems) {
       await database.runAsync(
-        `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, platform, ocr_text, ocr_done, created_at, ingested_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, platform, source_date, ocr_text, ocr_done, ocr_status, created_at, ingested_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           item.id,
           item.title,
@@ -547,8 +797,10 @@ const forceRecreateItemsTableIfNeeded = async (database: SQLite.SQLiteDatabase):
           item.thumbnail_url || null,
           item.source,
           item.platform || null,
+          item.source_date || null,
           item.ocr_text || null,
           item.ocr_done ? 1 : 0,
+          item.ocr_status || null,
           item.created_at,
           item.ingested_at,
           item.updated_at
@@ -595,13 +847,6 @@ export const getCurrentTimestamp = (): string => {
   return new Date().toISOString();
 };
 
-// Close database connection (for cleanup)
-export const closeDatabase = async (): Promise<void> => {
-  if (db) {
-    await db.closeAsync();
-    db = null;
-  }
-};
 
 // Reset database (for development/testing)
 export const resetDatabase = async (): Promise<void> => {

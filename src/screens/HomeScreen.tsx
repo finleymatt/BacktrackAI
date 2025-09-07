@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Card, Button } from '../components';
 import { useTheme } from '../theme/ThemeContext';
@@ -13,9 +13,12 @@ import {
   processScreenshotOcr,
   cleanupOrphanedScreenshots,
   getScreenshotOcrStatus,
-  reprocessAllScreenshotOcr
+  reprocessAllScreenshotOcr,
+  processPendingScreenshotOCR,
+  getOcrQueueStatus,
+  debugPhotoLibrary
 } from '../features/ingest';
-import { resetDatabase } from '../data/db';
+import { resetDatabase, forceResetDatabase, fixScreenshotConstraint } from '../data/db';
 
 export const HomeScreen: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -27,6 +30,12 @@ export const HomeScreen: React.FC = () => {
     total: number;
     withOcr: number;
     withoutOcr: number;
+  } | null>(null);
+  const [ocrQueueStatus, setOcrQueueStatus] = useState<{
+    pending: number;
+    done: number;
+    error: number;
+    total: number;
   } | null>(null);
   const [processingStatus, setProcessingStatus] = useState<{
     isProcessing: boolean;
@@ -56,6 +65,10 @@ export const HomeScreen: React.FC = () => {
         withOcr: ocrStatusData.withOcr,
         withoutOcr: ocrStatusData.withoutOcr
       });
+      
+      // Load OCR queue status
+      const queueStatus = await getOcrQueueStatus();
+      setOcrQueueStatus(queueStatus);
     } catch (error) {
       console.error('Failed to load database stats:', error);
     } finally {
@@ -80,7 +93,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleToggleOcrMode = () => {
-    const newMode = ocrConfig.mode === 'demo' ? 'expo-text-recognition' : 'demo';
+    const newMode: 'demo' | 'expo-text-recognition' = ocrConfig.mode === 'demo' ? 'expo-text-recognition' : 'demo';
     const newConfig = { ...ocrConfig, mode: newMode };
     setOcrConfig(newConfig);
     setOcrConfigState(newConfig);
@@ -95,20 +108,51 @@ export const HomeScreen: React.FC = () => {
         total: 0,
       });
 
-      const result = await processScreenshotOcr((progress) => {
+      // Check if there are any pending items first
+      const queueStatus = await getOcrQueueStatus();
+      if (queueStatus.pending === 0) {
+        Alert.alert(
+          'No Pending Screenshots',
+          'No pending screenshots to process. Import some screenshots first using the Add screen.'
+        );
+        setProcessingStatus({ isProcessing: false, current: 0, total: 0 });
+        return;
+      }
+
+      // Process in batches with progress updates
+      let totalProcessed = 0;
+      let totalRemaining = queueStatus.pending;
+      const maxBatches = 5; // Safety cap to keep UI responsive
+      
+      for (let batch = 0; batch < maxBatches && totalRemaining > 0; batch++) {
         setProcessingStatus({
           isProcessing: true,
-          current: progress.current,
-          total: progress.total,
-          currentItem: progress.currentItem,
+          current: totalProcessed,
+          total: queueStatus.pending,
+          currentItem: `Processing batch ${batch + 1}/${maxBatches}...`,
         });
-      });
+
+        const result = await processPendingScreenshotOCR({
+          batchSize: 10,
+          maxBatchesPerRun: 1
+        });
+
+        totalProcessed += result.processed;
+        totalRemaining = result.remaining;
+
+        // Small delay between batches
+        if (totalRemaining > 0 && batch < maxBatches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
 
       setProcessingStatus({ isProcessing: false, current: 0, total: 0 });
-      Alert.alert(
-        'OCR Processing Complete',
-        `Processed: ${result.processed} items\nFailed: ${result.failed} items`
-      );
+      
+      const message = totalRemaining > 0 
+        ? `OCR processing paused: ${totalProcessed} items processed, ${totalRemaining} remaining. Press the button again to continue.`
+        : `OCR complete: ${totalProcessed} items processed.`;
+        
+      Alert.alert('OCR Processing Complete', message);
       await loadStats(); // Reload stats to show updated counts
     } catch (error) {
       console.error('OCR processing failed:', error);
@@ -189,6 +233,79 @@ export const HomeScreen: React.FC = () => {
     );
   };
 
+  const handleForceResetDatabase = async () => {
+    Alert.alert(
+      'Force Reset Database',
+      'This will completely delete the database file and recreate it. Use this if you\'re experiencing database locking issues. All data will be lost. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Force Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await forceResetDatabase();
+              await loadStats();
+              Alert.alert('Success', 'Database has been force reset');
+            } catch (error) {
+              console.error('Failed to force reset database:', error);
+              Alert.alert('Error', 'Failed to force reset database');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleTestScreenshotConstraint = async () => {
+    try {
+      const { ItemsRepository } = await import('../data/repositories/items');
+      
+      // Try to create a test item with source='screenshot'
+      const testItem = await ItemsRepository.create({
+        title: 'Test Screenshot',
+        description: 'Testing screenshot constraint',
+        source: 'screenshot',
+        ocr_status: 'pending'
+      });
+      
+      // Clean up the test item
+      await ItemsRepository.delete(testItem.id);
+      
+      Alert.alert('Success', 'Screenshot constraint is working correctly!');
+    } catch (error) {
+      console.error('Screenshot constraint test failed:', error);
+      Alert.alert('Error', `Screenshot constraint test failed: ${error}`);
+    }
+  };
+
+  const handleFixScreenshotConstraint = async () => {
+    Alert.alert(
+      'Fix Screenshot Constraint',
+      'This will recreate the items table with the correct constraint to allow screenshot sources. Your data will be preserved. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Fix Constraint',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await fixScreenshotConstraint();
+              await loadStats();
+              Alert.alert('Success', 'Screenshot constraint has been fixed!');
+            } catch (error) {
+              console.error('Failed to fix screenshot constraint:', error);
+              Alert.alert('Error', 'Failed to fix screenshot constraint');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleCleanupOrphaned = async () => {
     try {
       setLoading(true);
@@ -206,9 +323,23 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleDebugPhotoLibrary = async () => {
+    try {
+      console.log('🔍 Debugging photo library...');
+      await debugPhotoLibrary(20);
+      Alert.alert(
+        'Debug Complete',
+        'Check the console logs to see what\'s in your photo library. Look for the 📸 section.'
+      );
+    } catch (error) {
+      console.error('Failed to debug photo library:', error);
+      Alert.alert('Error', 'Failed to debug photo library');
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.content}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <Text variant="h1" style={styles.title}>
           Home
         </Text>
@@ -269,31 +400,70 @@ export const HomeScreen: React.FC = () => {
             </Text>
           )}
           
-          <View style={styles.buttonContainer}>
-            <Button
-              title="Seed Database (Dev)"
-              variant="outline"
-              onPress={handleSeedDatabase}
-              style={[styles.button, styles.seedButton]}
-            />
-            <Button
-              title="Reset Database (Dev)"
-              variant="outline"
-              onPress={handleResetDatabase}
-              style={[styles.button, styles.resetButton]}
-            />
-            <Button
-              title="Cleanup Orphaned (Dev)"
-              variant="outline"
-              onPress={handleCleanupOrphaned}
-              style={[styles.button, styles.cleanupButton]}
-            />
-            <Button
-              title="Toggle Theme"
-              variant="outline"
-              onPress={toggleTheme}
-              style={styles.button}
-            />
+          <View style={styles.buttonSection}>
+            <Text variant="caption" style={styles.sectionLabel}>Database Management</Text>
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Seed DB"
+                variant="outline"
+                onPress={handleSeedDatabase}
+                style={[styles.button, styles.seedButton]}
+              />
+              <Button
+                title="Reset DB"
+                variant="outline"
+                onPress={handleResetDatabase}
+                style={[styles.button, styles.resetButton]}
+              />
+              <Button
+                title="Force Reset"
+                variant="outline"
+                onPress={handleForceResetDatabase}
+                style={[styles.button, styles.forceResetButton]}
+              />
+            </View>
+          </View>
+
+          <View style={styles.buttonSection}>
+            <Text variant="caption" style={styles.sectionLabel}>Screenshot Tools</Text>
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Test Constraint"
+                variant="outline"
+                onPress={handleTestScreenshotConstraint}
+                style={[styles.button, styles.testButton]}
+              />
+              <Button
+                title="Fix Constraint"
+                variant="outline"
+                onPress={handleFixScreenshotConstraint}
+                style={[styles.button, styles.fixButton]}
+              />
+              <Button
+                title="Debug Photos"
+                variant="outline"
+                onPress={handleDebugPhotoLibrary}
+                style={[styles.button, styles.debugButton]}
+              />
+            </View>
+          </View>
+
+          <View style={styles.buttonSection}>
+            <Text variant="caption" style={styles.sectionLabel}>Utilities</Text>
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Cleanup"
+                variant="outline"
+                onPress={handleCleanupOrphaned}
+                style={[styles.button, styles.cleanupButton]}
+              />
+              <Button
+                title="Toggle Theme"
+                variant="outline"
+                onPress={toggleTheme}
+                style={styles.button}
+              />
+            </View>
           </View>
         </Card>
 
@@ -310,13 +480,13 @@ export const HomeScreen: React.FC = () => {
             <Text variant="body" style={styles.ocrStatus}>
               Mode: {ocrConfig.mode === 'demo' ? '🎭 Demo (Mock)' : '🔍 Real OCR'}
             </Text>
-            {ocrStatus && (
+            {ocrQueueStatus && (
               <>
                 <Text variant="body" style={styles.ocrStatus}>
-                  Screenshots: {ocrStatus.total} total
+                  Screenshots: {ocrQueueStatus.total} total
                 </Text>
                 <Text variant="body" style={styles.ocrStatus}>
-                  OCR Status: {ocrStatus.withOcr} with OCR, {ocrStatus.withoutOcr} without
+                  OCR Queue: {ocrQueueStatus.pending} pending, {ocrQueueStatus.done} done, {ocrQueueStatus.error} errors
                 </Text>
               </>
             )}
@@ -359,7 +529,7 @@ export const HomeScreen: React.FC = () => {
           {/* Real-time Progress Indicator */}
           {processingStatus.isProcessing && (
             <Card style={styles.progressCard}>
-              <Text variant="h4" style={styles.progressTitle}>
+              <Text variant="h3" style={styles.progressTitle}>
                 🔄 Processing OCR...
               </Text>
               
@@ -393,7 +563,7 @@ export const HomeScreen: React.FC = () => {
           </Text>
         </Card>
 
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -402,9 +572,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  content: {
     padding: 16,
+    paddingBottom: 32, // Extra padding at bottom for better scrolling
   },
   title: {
     marginBottom: 24,
@@ -450,14 +623,24 @@ const styles = StyleSheet.create({
     color: 'red',
     marginBottom: 16,
   },
+  buttonSection: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    textAlign: 'center',
+    marginBottom: 8,
+    opacity: 0.7,
+    fontWeight: 'bold',
+  },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     flexWrap: 'wrap',
   },
   button: {
-    marginHorizontal: 8,
-    marginVertical: 4,
+    marginHorizontal: 4,
+    marginVertical: 2,
+    minWidth: 80,
   },
   seedButton: {
     backgroundColor: '#4CAF50',
@@ -465,8 +648,20 @@ const styles = StyleSheet.create({
   resetButton: {
     backgroundColor: '#FF9800',
   },
+  forceResetButton: {
+    backgroundColor: '#F44336',
+  },
+  testButton: {
+    backgroundColor: '#9C27B0',
+  },
+  fixButton: {
+    backgroundColor: '#FF5722',
+  },
   cleanupButton: {
     backgroundColor: '#9C27B0',
+  },
+  debugButton: {
+    backgroundColor: '#607D8B',
   },
   sectionTitle: {
     marginBottom: 12,

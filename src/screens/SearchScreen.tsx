@@ -126,6 +126,16 @@ export const SearchScreen: React.FC = () => {
                 keyExtractor={(item) => item.id}
                 style={styles.resultsList}
                 showsVerticalScrollIndicator={false}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                updateCellsBatchingPeriod={50}
+                initialNumToRender={10}
+                windowSize={10}
+                getItemLayout={(data, index) => ({
+                  length: 100, // Approximate item height
+                  offset: 100 * index,
+                  index,
+                })}
               />
             ) : !isSearching ? (
               <Card style={styles.noResultsCard}>

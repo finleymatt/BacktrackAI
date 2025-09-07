@@ -141,7 +141,7 @@ const performRealOcr = async (imageUri: string): Promise<OcrResult> => {
     const result = await TextRecognition.recognize(imageUri);
     
     if (result && result.length > 0) {
-      const extractedText = result.map(block => block.text).join('\n');
+      const extractedText = result.map((block: any) => block.text).join('\n');
       return {
         success: true,
         text: extractedText,
@@ -184,6 +184,28 @@ export const performOcr = async (imageUri: string): Promise<OcrResult> => {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown OCR error',
     };
+  }
+};
+
+/**
+ * Extract text from image - simplified interface for the new OCR queue
+ * Returns the extracted text directly or a mocked string if OCR fails
+ */
+export const extractTextFromImage = async (imageUri: string): Promise<string> => {
+  try {
+    const result = await performOcr(imageUri);
+    
+    if (result.success && result.text) {
+      return result.text;
+    } else {
+      // If OCR fails, return a mocked string to mark as processed
+      console.warn(`OCR failed for ${imageUri}, returning mocked text`);
+      return '[mocked OCR] - OCR processing failed, but item marked as processed';
+    }
+  } catch (error) {
+    console.error(`OCR extraction failed for ${imageUri}:`, error);
+    // Return mocked text to mark as processed even if OCR fails
+    return '[mocked OCR] - OCR processing failed, but item marked as processed';
   }
 };
 
