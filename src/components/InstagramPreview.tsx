@@ -52,9 +52,9 @@ export const InstagramPreview: React.FC<InstagramPreviewProps> = ({ item, onPres
         <Card style={[styles.container, { backgroundColor: theme.colors.surface }]}>
           {/* Instagram Header */}
           <View style={styles.header}>
-            <View style={styles.instagramIcon}>
-              <Text style={styles.instagramText}>📷</Text>
-            </View>
+          <View style={styles.instagramIcon}>
+            <Text style={styles.instagramText}>📸</Text>
+          </View>
             <View style={styles.headerText}>
               <Text variant="bodySmall" style={styles.username}>
                 Instagram
@@ -82,9 +82,9 @@ export const InstagramPreview: React.FC<InstagramPreviewProps> = ({ item, onPres
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.placeholder, { backgroundColor: theme.colors.border }]}>
-                <Text style={styles.placeholderText}>📷</Text>
-              </View>
+            <View style={[styles.placeholder, { backgroundColor: theme.colors.border }]}>
+              <Text style={styles.placeholderText}>📸</Text>
+            </View>
             )}
             
             <View style={styles.textContent}>

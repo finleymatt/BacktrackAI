@@ -15,7 +15,7 @@ const getPlatformInfo = (platform: Platform) => {
     case 'spotify':
       return { icon: '🎵', color: '#1DB954', name: 'Spotify' };
     case 'instagram':
-      return { icon: '📷', color: '#E4405F', name: 'Instagram' };
+      return { icon: '📸', color: '#E4405F', name: 'Instagram' };
     case 'youtube':
       return { icon: '▶️', color: '#FF0000', name: 'YouTube' };
     default:

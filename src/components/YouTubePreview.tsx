@@ -52,9 +52,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ item, onPress })
         <Card style={[styles.container, { backgroundColor: theme.colors.surface }]}>
           {/* YouTube Header */}
           <View style={styles.header}>
-            <View style={styles.youtubeIcon}>
-              <Text style={styles.youtubeText}>▶️</Text>
-            </View>
+          <View style={styles.youtubeIcon}>
+            <Text style={styles.youtubeText}>▶️</Text>
+          </View>
             <View style={styles.headerText}>
               <Text variant="bodySmall" style={styles.platform}>
                 YouTube
@@ -82,9 +82,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ item, onPress })
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.placeholder, { backgroundColor: theme.colors.border }]}>
-                <Text style={styles.placeholderText}>▶️</Text>
-              </View>
+            <View style={[styles.placeholder, { backgroundColor: theme.colors.border }]}>
+              <Text style={styles.placeholderText}>▶️</Text>
+            </View>
             )}
             
             <View style={styles.textContent}>
