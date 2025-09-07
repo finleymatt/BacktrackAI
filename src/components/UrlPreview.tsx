@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Image, TouchableOpacity, Linking, Alert } from 'react-native';
-import { Text } from './Text';
+import { Text, AddToFolderModal } from './';
 import { Card } from './Card';
 import { useTheme } from '../theme/ThemeContext';
 import { Item, Platform } from '../data/models';
@@ -26,6 +26,7 @@ const getPlatformInfo = (platform: Platform) => {
 export const UrlPreview: React.FC<UrlPreviewProps> = ({ item, onPress }) => {
   const { theme } = useTheme();
   const platformInfo = getPlatformInfo(item.platform || 'generic');
+  const [showAddToFolderModal, setShowAddToFolderModal] = useState(false);
 
   const handleOpenUrl = async () => {
     if (!item.content_url) return;
@@ -61,7 +62,8 @@ export const UrlPreview: React.FC<UrlPreviewProps> = ({ item, onPress }) => {
   };
 
   return (
-    <TouchableOpacity onPress={handleCardPress} activeOpacity={0.7}>
+    <>
+      <TouchableOpacity onPress={handleCardPress} activeOpacity={0.7}>
       <Card style={[styles.container, { backgroundColor: theme.colors.surface }]}>
         {/* Platform Header */}
         <View style={styles.header}>
@@ -76,11 +78,14 @@ export const UrlPreview: React.FC<UrlPreviewProps> = ({ item, onPress }) => {
               {new Date(item.created_at).toLocaleDateString()}
             </Text>
           </View>
-          <TouchableOpacity onPress={handleOpenUrl} style={styles.openButton}>
-            <Text variant="caption" style={[styles.openButtonText, { color: theme.colors.primary }]}>
-              Open
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity onPress={() => setShowAddToFolderModal(true)} style={styles.iconButton}>
+              <Text style={styles.iconText}>📁</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleOpenUrl} style={styles.iconButton}>
+              <Text style={styles.iconText}>🔗</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Content Preview */}
@@ -117,6 +122,14 @@ export const UrlPreview: React.FC<UrlPreviewProps> = ({ item, onPress }) => {
         </View>
       </Card>
     </TouchableOpacity>
+
+      <AddToFolderModal
+        visible={showAddToFolderModal}
+        onClose={() => setShowAddToFolderModal(false)}
+        itemId={item.id}
+        itemTitle={item.title}
+      />
+    </>
   );
 };
 
@@ -152,14 +165,20 @@ const styles = StyleSheet.create({
   timestamp: {
     opacity: 0.6,
   },
-  openButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  openButtonText: {
-    fontWeight: '500',
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconText: {
+    fontSize: 16,
   },
   content: {
     flexDirection: 'row',

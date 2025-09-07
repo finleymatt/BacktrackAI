@@ -32,6 +32,7 @@ export interface Folder {
   name: string;
   description?: string;
   color?: string;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -58,7 +59,7 @@ export interface ItemTag {
 }
 
 // Database schema version for migrations
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 // Table names
 export const TABLES = {

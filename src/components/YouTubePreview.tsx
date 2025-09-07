@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Image, TouchableOpacity, Linking, Alert } from 'react-native';
-import { Text } from './Text';
+import { Text, AddToFolderModal } from './';
 import { Card } from './Card';
 import { useTheme } from '../theme/ThemeContext';
 import { Item } from '../data/models';
@@ -12,6 +12,7 @@ interface YouTubePreviewProps {
 
 export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ item, onPress }) => {
   const { theme } = useTheme();
+  const [showAddToFolderModal, setShowAddToFolderModal] = useState(false);
 
   const handleOpenYouTube = async () => {
     if (!item.content_url) return;
@@ -46,62 +47,74 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ item, onPress })
   };
 
   return (
-    <TouchableOpacity onPress={handleCardPress} activeOpacity={0.7}>
-      <Card style={[styles.container, { backgroundColor: theme.colors.surface }]}>
-        {/* YouTube Header */}
-        <View style={styles.header}>
-          <View style={styles.youtubeIcon}>
-            <Text style={styles.youtubeText}>▶️</Text>
-          </View>
-          <View style={styles.headerText}>
-            <Text variant="bodySmall" style={styles.platform}>
-              YouTube
-            </Text>
-            <Text variant="caption" style={styles.timestamp}>
-              {new Date(item.created_at).toLocaleDateString()}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={handleOpenYouTube} style={styles.openButton}>
-            <Text variant="caption" style={[styles.openButtonText, { color: theme.colors.primary }]}>
-              Open
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Content Preview */}
-        <View style={styles.content}>
-          {item.thumbnail_url ? (
-            <Image
-              source={{ uri: item.thumbnail_url }}
-              style={styles.thumbnail}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.placeholder, { backgroundColor: theme.colors.border }]}>
-              <Text style={styles.placeholderText}>▶️</Text>
+    <>
+      <TouchableOpacity onPress={handleCardPress} activeOpacity={0.7}>
+        <Card style={[styles.container, { backgroundColor: theme.colors.surface }]}>
+          {/* YouTube Header */}
+          <View style={styles.header}>
+            <View style={styles.youtubeIcon}>
+              <Text style={styles.youtubeText}>▶️</Text>
             </View>
-          )}
-          
-          <View style={styles.textContent}>
-            <Text variant="body" style={styles.title} numberOfLines={2}>
-              {item.title}
-            </Text>
-            {item.description && (
-              <Text variant="bodySmall" style={styles.description} numberOfLines={3}>
-                {item.description}
+            <View style={styles.headerText}>
+              <Text variant="bodySmall" style={styles.platform}>
+                YouTube
               </Text>
-            )}
+              <Text variant="caption" style={styles.timestamp}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity onPress={() => setShowAddToFolderModal(true)} style={styles.iconButton}>
+                <Text style={styles.iconText}>📁</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleOpenYouTube} style={styles.iconButton}>
+                <Text style={styles.iconText}>🔗</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text variant="caption" style={styles.urlText} numberOfLines={1}>
-            {item.content_url}
-          </Text>
-        </View>
-      </Card>
-    </TouchableOpacity>
+          {/* Content Preview */}
+          <View style={styles.content}>
+            {item.thumbnail_url ? (
+              <Image
+                source={{ uri: item.thumbnail_url }}
+                style={styles.thumbnail}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.placeholder, { backgroundColor: theme.colors.border }]}>
+                <Text style={styles.placeholderText}>▶️</Text>
+              </View>
+            )}
+            
+            <View style={styles.textContent}>
+              <Text variant="body" style={styles.title} numberOfLines={2}>
+                {item.title}
+              </Text>
+              {item.description && (
+                <Text variant="bodySmall" style={styles.description} numberOfLines={3}>
+                  {item.description}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text variant="caption" style={styles.urlText} numberOfLines={1}>
+              {item.content_url}
+            </Text>
+          </View>
+        </Card>
+      </TouchableOpacity>
+
+      <AddToFolderModal
+        visible={showAddToFolderModal}
+        onClose={() => setShowAddToFolderModal(false)}
+        itemId={item.id}
+        itemTitle={item.title}
+      />
+    </>
   );
 };
 
@@ -138,14 +151,20 @@ const styles = StyleSheet.create({
   timestamp: {
     opacity: 0.6,
   },
-  openButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  openButtonText: {
-    fontWeight: '500',
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconText: {
+    fontSize: 16,
   },
   content: {
     flexDirection: 'row',

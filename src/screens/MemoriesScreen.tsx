@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Card, ItemDetail, InstagramPreview, YouTubePreview, UrlPreview } from '../components';
+import { Text, Card, ItemDetail, ItemCard, InstagramPreview, YouTubePreview, UrlPreview } from '../components';
 import { useTheme } from '../theme/ThemeContext';
 import { ItemsRepository } from '../data/repositories/items';
 import { Item } from '../data/models';
@@ -58,31 +58,11 @@ export const MemoriesScreen: React.FC = () => {
 
     // Default card for non-URL items
     return (
-      <TouchableOpacity onPress={() => setSelectedItem(item)}>
-        <Card style={styles.resultCard}>
-          <Text variant="h3" style={styles.resultTitle}>
-            {item.title}
-          </Text>
-          {item.description && (
-            <Text variant="body" style={styles.resultDescription}>
-              {item.description}
-            </Text>
-          )}
-          {item.ocr_text && (
-            <Text variant="caption" style={styles.ocrPreview} numberOfLines={2}>
-              OCR: {item.ocr_text.substring(0, 100)}...
-            </Text>
-          )}
-          <View style={styles.resultMeta}>
-            <Text variant="caption" style={styles.metaText}>
-              {item.source} • {new Date(item.created_at).toLocaleDateString()}
-            </Text>
-            <Text variant="caption" style={styles.metaText}>
-              {item.ocr_done ? '✅ OCR' : '⏳ OCR'}
-            </Text>
-          </View>
-        </Card>
-      </TouchableOpacity>
+      <ItemCard
+        item={item}
+        onPress={() => setSelectedItem(item)}
+        showAddToFolder={true}
+      />
     );
   };
 

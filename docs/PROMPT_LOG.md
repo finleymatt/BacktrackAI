@@ -224,3 +224,9 @@ Generic URL Preview:
 ✅ Smart domain extraction (removes "www.")
 ✅ Fallback to platform colors when no thumbnail
 ✅ Clean web link styling
+
+## Database & Supabase Considerations
+- **ALWAYS check if Supabase commands are needed** when dealing with database schema changes, migrations, or column issues
+- **Database migrations** may require corresponding Supabase schema updates
+- **Column additions/modifications** need to be reflected in both local SQLite and Supabase
+- **When database errors occur** (like missing columns), consider if Supabase schema needs updating

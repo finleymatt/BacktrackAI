@@ -22,6 +22,9 @@ export const initDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
     // Force ensure platform column exists (critical for URL ingestion)
     await forceEnsurePlatformColumn(db);
     
+    // Force ensure is_public column exists in folders table (critical for folder feature)
+    await forceEnsureIsPublicColumn(db);
+    
     console.log('Database initialized successfully');
     return db;
   } catch (error) {
@@ -62,8 +65,19 @@ const runMigrations = async (database: SQLite.SQLiteDatabase): Promise<void> => 
       await migration3_addPlatformField(database);
     }
     
+    // Migration 4: Add is_public field to folders table
+    if (currentVersion < 4) {
+      await migration4_addIsPublicToFolders(database);
+    }
+    
     // Always ensure platform column exists (safety check)
     await ensurePlatformColumnExists(database);
+    
+    // Always ensure is_public column exists in folders table (safety check)
+    await ensureIsPublicColumnExists(database);
+    
+    // Force ensure is_public column exists (more aggressive approach)
+    await forceEnsureIsPublicColumn(database);
     
     // Force recreate items table if constraint is wrong (SQLite limitation)
     await forceRecreateItemsTableIfNeeded(database);
@@ -105,6 +119,7 @@ const migration1_createTables = async (database: SQLite.SQLiteDatabase): Promise
       name TEXT NOT NULL,
       description TEXT,
       color TEXT,
+      is_public BOOLEAN NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`,
@@ -142,6 +157,7 @@ const migration1_createTables = async (database: SQLite.SQLiteDatabase): Promise
     `CREATE INDEX IF NOT EXISTS idx_items_created_at ON ${TABLES.ITEMS} (created_at);`,
     `CREATE INDEX IF NOT EXISTS idx_items_source ON ${TABLES.ITEMS} (source);`,
     `CREATE INDEX IF NOT EXISTS idx_folders_name ON ${TABLES.FOLDERS} (name);`,
+    `CREATE INDEX IF NOT EXISTS idx_folders_is_public ON ${TABLES.FOLDERS} (is_public);`,
     `CREATE INDEX IF NOT EXISTS idx_tags_name ON ${TABLES.TAGS} (name);`,
     `CREATE INDEX IF NOT EXISTS idx_item_folders_item_id ON ${TABLES.ITEM_FOLDERS} (item_id);`,
     `CREATE INDEX IF NOT EXISTS idx_item_folders_folder_id ON ${TABLES.ITEM_FOLDERS} (folder_id);`,
@@ -219,6 +235,36 @@ const migration3_addPlatformField = async (database: SQLite.SQLiteDatabase): Pro
   }
 };
 
+// Migration 4: Add is_public field to folders table
+const migration4_addIsPublicToFolders = async (database: SQLite.SQLiteDatabase): Promise<void> => {
+  console.log('Running migration 4: Adding is_public field to folders table');
+  
+  try {
+    // Check if is_public column already exists
+    const tableInfo = await database.getAllAsync(`PRAGMA table_info(${TABLES.FOLDERS});`);
+    const existingColumns = tableInfo.map((col: any) => col.name);
+    
+    const migrations = [];
+    
+    // Only add is_public column if it doesn't exist
+    if (!existingColumns.includes('is_public')) {
+      migrations.push(`ALTER TABLE ${TABLES.FOLDERS} ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 0;`);
+    }
+    
+    // Create index for is_public field
+    migrations.push(`CREATE INDEX IF NOT EXISTS idx_folders_is_public ON ${TABLES.FOLDERS} (is_public);`);
+
+    for (const migration of migrations) {
+      await database.execAsync(migration);
+    }
+    
+    console.log('Migration 4 completed: is_public field added to folders table');
+  } catch (error) {
+    console.error('Migration 4 failed:', error);
+    // Don't throw - let the app continue even if migration fails
+  }
+};
+
 // Ensure platform column exists (safety check)
 const ensurePlatformColumnExists = async (database: SQLite.SQLiteDatabase): Promise<void> => {
   try {
@@ -234,6 +280,124 @@ const ensurePlatformColumnExists = async (database: SQLite.SQLiteDatabase): Prom
     }
   } catch (error) {
     console.error('Error ensuring platform column exists:', error);
+    // Don't throw - let the app continue
+  }
+};
+
+// Ensure is_public column exists in folders table (safety check)
+const ensureIsPublicColumnExists = async (database: SQLite.SQLiteDatabase): Promise<void> => {
+  try {
+    // Check if folders table exists first
+    const tableExists = await database.getFirstAsync(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+      [TABLES.FOLDERS]
+    );
+    
+    if (!tableExists) {
+      console.log('Folders table does not exist, skipping is_public column check');
+      return;
+    }
+    
+    // Check if is_public column exists
+    const tableInfo = await database.getAllAsync(`PRAGMA table_info(${TABLES.FOLDERS});`);
+    const existingColumns = tableInfo.map((col: any) => col.name);
+    
+    if (!existingColumns.includes('is_public')) {
+      console.log('is_public column missing from folders table, adding it now...');
+      await database.execAsync(`ALTER TABLE ${TABLES.FOLDERS} ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 0;`);
+      await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_folders_is_public ON ${TABLES.FOLDERS} (is_public);`);
+      console.log('is_public column added successfully to folders table');
+    } else {
+      console.log('✅ is_public column already exists in folders table');
+    }
+  } catch (error) {
+    console.error('Error ensuring is_public column exists in folders table:', error);
+    // Don't throw - let the app continue
+  }
+};
+
+// Force ensure is_public column exists (more aggressive approach)
+const forceEnsureIsPublicColumn = async (database: SQLite.SQLiteDatabase): Promise<void> => {
+  try {
+    console.log('🔍 Force checking is_public column in folders table...');
+    
+    // First, check if folders table exists
+    const tableExists = await database.getFirstAsync(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+      [TABLES.FOLDERS]
+    );
+    
+    if (!tableExists) {
+      console.log('⚠️ Folders table does not exist, creating it with is_public column...');
+      // Create the folders table with is_public column
+      await database.execAsync(`
+        CREATE TABLE ${TABLES.FOLDERS} (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          color TEXT,
+          is_public BOOLEAN NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+      await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_folders_name ON ${TABLES.FOLDERS} (name);`);
+      await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_folders_is_public ON ${TABLES.FOLDERS} (is_public);`);
+      console.log('✅ Folders table created with is_public column');
+      return;
+    }
+    
+    // Try to add the is_public column (will fail silently if it already exists)
+    try {
+      await database.execAsync(`ALTER TABLE ${TABLES.FOLDERS} ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 0;`);
+      console.log('✅ is_public column added successfully to folders table');
+    } catch (error) {
+      // Column might already exist, which is fine
+      console.log('ℹ️ is_public column already exists or error adding it:', error.message);
+    }
+    
+    // Always try to create the index (will fail silently if it already exists)
+    try {
+      await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_folders_is_public ON ${TABLES.FOLDERS} (is_public);`);
+      console.log('✅ is_public index created/verified for folders table');
+    } catch (error) {
+      console.log('⚠️ Error creating is_public index for folders table:', error.message);
+    }
+    
+    // Verify the column exists
+    const tableInfo = await database.getAllAsync(`PRAGMA table_info(${TABLES.FOLDERS});`);
+    const existingColumns = tableInfo.map((col: any) => col.name);
+    console.log('📋 Current folders table columns:', existingColumns);
+    
+    if (existingColumns.includes('is_public')) {
+      console.log('✅ is_public column confirmed to exist in folders table');
+    } else {
+      console.error('❌ is_public column still missing from folders table after force check');
+      // Try one more time with a different approach
+      try {
+        console.log('🔄 Attempting to recreate folders table with is_public column...');
+        await database.execAsync(`DROP TABLE IF EXISTS ${TABLES.FOLDERS};`);
+        await database.execAsync(`
+          CREATE TABLE ${TABLES.FOLDERS} (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            color TEXT,
+            is_public BOOLEAN NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+        `);
+        await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_folders_name ON ${TABLES.FOLDERS} (name);`);
+        await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_folders_is_public ON ${TABLES.FOLDERS} (is_public);`);
+        console.log('✅ Folders table recreated with is_public column');
+      } catch (recreateError) {
+        console.error('❌ Failed to recreate folders table:', recreateError);
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in force ensure is_public column for folders table:', error);
     // Don't throw - let the app continue
   }
 };
@@ -459,4 +623,30 @@ export const resetDatabase = async (): Promise<void> => {
   
   // Reinitialize
   await initDatabase();
+};
+
+// Force reset folders table (for debugging)
+export const resetFoldersTable = async (): Promise<void> => {
+  const database = await getDatabase();
+  try {
+    console.log('🔄 Resetting folders table...');
+    await database.execAsync(`DROP TABLE IF EXISTS ${TABLES.FOLDERS};`);
+    await database.execAsync(`
+      CREATE TABLE ${TABLES.FOLDERS} (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        color TEXT,
+        is_public BOOLEAN NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_folders_name ON ${TABLES.FOLDERS} (name);`);
+    await database.execAsync(`CREATE INDEX IF NOT EXISTS idx_folders_is_public ON ${TABLES.FOLDERS} (is_public);`);
+    console.log('✅ Folders table reset successfully');
+  } catch (error) {
+    console.error('❌ Failed to reset folders table:', error);
+    throw error;
+  }
 };

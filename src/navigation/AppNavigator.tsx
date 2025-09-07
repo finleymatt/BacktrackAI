@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useTheme } from '../theme/ThemeContext';
 import { TabNavigator } from './TabNavigator';
+import { FolderDetailScreen } from '../screens';
 
 const Stack = createStackNavigator();
 
@@ -20,6 +21,13 @@ export const AppNavigator: React.FC = () => {
         }}
       >
         <Stack.Screen name="MainTabs" component={TabNavigator} />
+        <Stack.Screen 
+          name="FolderDetail" 
+          component={FolderDetailScreen}
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

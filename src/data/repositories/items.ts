@@ -229,4 +229,34 @@ export class ItemsRepository {
     );
     return results;
   }
+
+  // Get items not in a specific folder
+  static async getItemsNotInFolder(folderId: string, limit: number = 50, offset: number = 0): Promise<Item[]> {
+    const db = await getDatabase();
+    const results = await db.getAllAsync<Item>(
+      `SELECT * FROM ${TABLES.ITEMS} 
+       WHERE id NOT IN (
+         SELECT item_id FROM ${TABLES.ITEM_FOLDERS} WHERE folder_id = ?
+       )
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+      [folderId, limit, offset]
+    );
+    return results;
+  }
+
+  // Get recent items not in any folder
+  static async getRecentItemsNotInFolders(limit: number = 20): Promise<Item[]> {
+    const db = await getDatabase();
+    const results = await db.getAllAsync<Item>(
+      `SELECT * FROM ${TABLES.ITEMS} 
+       WHERE id NOT IN (
+         SELECT DISTINCT item_id FROM ${TABLES.ITEM_FOLDERS}
+       )
+       ORDER BY created_at DESC
+       LIMIT ?`,
+      [limit]
+    );
+    return results;
+  }
 }

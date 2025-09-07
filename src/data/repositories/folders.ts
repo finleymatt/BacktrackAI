@@ -6,12 +6,14 @@ export interface CreateFolderData {
   name: string;
   description?: string;
   color?: string;
+  is_public?: boolean;
 }
 
 export interface UpdateFolderData {
   name?: string;
   description?: string;
   color?: string;
+  is_public?: boolean;
 }
 
 export class FoldersRepository {
@@ -24,18 +26,20 @@ export class FoldersRepository {
     const folder: Folder = {
       id,
       ...data,
+      is_public: data.is_public ?? false, // Default to private
       created_at: now,
       updated_at: now,
     };
 
     await db.runAsync(
-      `INSERT INTO ${TABLES.FOLDERS} (id, name, description, color, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO ${TABLES.FOLDERS} (id, name, description, color, is_public, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         folder.id,
         folder.name,
         folder.description || null,
         folder.color || null,
+        folder.is_public ? 1 : 0,
         folder.created_at,
         folder.updated_at,
       ]
@@ -96,6 +100,10 @@ export class FoldersRepository {
     if (data.color !== undefined) {
       updates.push('color = ?');
       values.push(data.color);
+    }
+    if (data.is_public !== undefined) {
+      updates.push('is_public = ?');
+      values.push(data.is_public ? 1 : 0);
     }
 
     if (updates.length === 0) {
