@@ -1,38 +1,118 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Card, ItemDetail, ItemCard, InstagramPreview, YouTubePreview, UrlPreview } from '../components';
+import { Text, Card, ItemDetail, ItemCard, InstagramPreview, YouTubePreview, UrlPreview, Button } from '../components';
 import { useTheme } from '../theme/ThemeContext';
 import { ItemsRepository } from '../data/repositories/items';
 import { Item } from '../data/models';
+import { 
+  getMemoriesWindows, 
+  selectMemories, 
+  groupMemoriesByPattern,
+  MemoryItem,
+  MemoriesSettings,
+  loadMemoriesSettings,
+  saveMemoriesSettings,
+  debugMemoriesData,
+  createTestMemoriesData
+} from '../features/memories';
+
+type TabType = 'yearly' | 'monthly';
 
 export const MemoriesScreen: React.FC = () => {
   const { theme } = useTheme();
-  const [items, setItems] = useState<Item[]>([]);
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
+  const [groupedMemories, setGroupedMemories] = useState<{
+    yearly: { [year: string]: MemoryItem[] };
+    monthly: { [interval: string]: MemoryItem[] };
+  }>({ yearly: {}, monthly: {} });
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabType>('yearly');
+  const [settings, setSettings] = useState<MemoriesSettings | null>(null);
 
   useEffect(() => {
-    loadItems();
+    loadMemories();
   }, []);
 
-  const loadItems = async () => {
+  const loadMemories = async () => {
     try {
       setLoading(true);
-      const allItems = await ItemsRepository.getAll(50, 0);
-      // Filter out items with no meaningful content
-      const filteredItems = allItems.filter(item => 
-        item.title || item.description || item.ocr_text || item.content_url
-      );
-      setItems(filteredItems);
+      
+      // Load settings
+      const memoriesSettings = await loadMemoriesSettings();
+      setSettings(memoriesSettings);
+      
+      // Compute memory windows
+      const today = new Date();
+      const windows = getMemoriesWindows(today, memoriesSettings);
+      
+      // Select memories
+      const selectedMemories = await selectMemories(windows, memoriesSettings);
+      setMemories(selectedMemories);
+      
+      // Group memories for display
+      const grouped = groupMemoriesByPattern(selectedMemories);
+      setGroupedMemories(grouped);
+      
     } catch (error) {
-      console.error('Failed to load items:', error);
+      console.error('Failed to load memories:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const renderItem = ({ item }: { item: Item }) => {
+  const handleMemoryAction = (action: string, memory: MemoryItem) => {
+    switch (action) {
+      case 'snooze':
+        Alert.alert(
+          'Snooze Memory',
+          'How many days would you like to snooze this memory?',
+          [
+            { text: '1 day', onPress: () => snoozeMemory(memory, 1) },
+            { text: '3 days', onPress: () => snoozeMemory(memory, 3) },
+            { text: '1 week', onPress: () => snoozeMemory(memory, 7) },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        break;
+      case 'dismiss':
+        dismissMemory(memory);
+        break;
+      case 'show_fewer':
+        showFewerLikeThis(memory);
+        break;
+      case 'add_to_folder':
+        // This would open the add to folder modal
+        console.log('Add to folder:', memory.id);
+        break;
+      case 'share':
+        // This would open the share modal
+        console.log('Share:', memory.id);
+        break;
+    }
+  };
+
+  const snoozeMemory = async (memory: MemoryItem, days: number) => {
+    // TODO: Implement snooze logic (store snooze date, remove from current view)
+    console.log(`Snoozing memory ${memory.id} for ${days} days`);
+    // For now, just remove from current view
+    setMemories(prev => prev.filter(m => m.id !== memory.id));
+  };
+
+  const dismissMemory = async (memory: MemoryItem) => {
+    // TODO: Implement dismiss logic (store dismissed state)
+    console.log(`Dismissing memory ${memory.id}`);
+    // For now, just remove from current view
+    setMemories(prev => prev.filter(m => m.id !== memory.id));
+  };
+
+  const showFewerLikeThis = async (memory: MemoryItem) => {
+    // TODO: Implement "show fewer like this" logic
+    console.log(`Show fewer like this: ${memory.id}`);
+  };
+
+  const renderMemoryItem = ({ item }: { item: MemoryItem }) => {
     // Use platform-specific preview for URL items
     if (item.source === 'url' && item.platform) {
       switch (item.platform) {
@@ -70,6 +150,139 @@ export const MemoriesScreen: React.FC = () => {
     );
   };
 
+  const renderMemoryActions = (memory: MemoryItem) => (
+    <View style={styles.memoryActions}>
+      <Button
+        title="Snooze"
+        variant="secondary"
+        size="small"
+        onPress={() => handleMemoryAction('snooze', memory)}
+      />
+      <Button
+        title="Dismiss"
+        variant="secondary"
+        size="small"
+        onPress={() => handleMemoryAction('dismiss', memory)}
+      />
+      <Button
+        title="Fewer"
+        variant="secondary"
+        size="small"
+        onPress={() => handleMemoryAction('show_fewer', memory)}
+      />
+    </View>
+  );
+
+  const renderTabChips = () => (
+    <View style={styles.tabContainer}>
+      <TouchableOpacity
+        style={[
+          styles.tabChip,
+          activeTab === 'yearly' && styles.activeTabChip,
+          { backgroundColor: activeTab === 'yearly' ? theme.colors.primary : theme.colors.surface }
+        ]}
+        onPress={() => setActiveTab('yearly')}
+      >
+        <Text 
+          variant="button" 
+          style={[
+            styles.tabText,
+            { color: activeTab === 'yearly' ? theme.colors.onPrimary : theme.colors.onSurface }
+          ]}
+        >
+          On This Day
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={[
+          styles.tabChip,
+          activeTab === 'monthly' && styles.activeTabChip,
+          { backgroundColor: activeTab === 'monthly' ? theme.colors.primary : theme.colors.surface }
+        ]}
+        onPress={() => setActiveTab('monthly')}
+      >
+        <Text 
+          variant="button" 
+          style={[
+            styles.tabText,
+            { color: activeTab === 'monthly' ? theme.colors.onPrimary : theme.colors.onSurface }
+          ]}
+        >
+          Months Ago
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderYearlySection = () => {
+    const yearlyEntries = Object.entries(groupedMemories.yearly).sort(([a], [b]) => parseInt(b) - parseInt(a));
+    
+    if (yearlyEntries.length === 0) {
+      return (
+        <Card style={styles.card}>
+          <Text variant="body" style={styles.description}>
+            No memories from this day in previous years.
+          </Text>
+        </Card>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.sectionContainer}>
+        {yearlyEntries.map(([year, yearMemories]) => (
+          <View key={year} style={styles.yearSection}>
+            <Text variant="h3" style={styles.sectionTitle}>
+              {year} ({yearMemories.length} {yearMemories.length === 1 ? 'memory' : 'memories'})
+            </Text>
+            {yearMemories.map((memory) => (
+              <View key={memory.id} style={styles.memoryContainer}>
+                {renderMemoryItem({ item: memory })}
+                {renderMemoryActions(memory)}
+              </View>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
+
+  const renderMonthlySection = () => {
+    const monthlyEntries = Object.entries(groupedMemories.monthly).sort(([a], [b]) => {
+      const aMonths = parseInt(a.split(' ')[0]);
+      const bMonths = parseInt(b.split(' ')[0]);
+      return aMonths - bMonths;
+    });
+    
+    if (monthlyEntries.length === 0) {
+      return (
+        <Card style={styles.card}>
+          <Text variant="body" style={styles.description}>
+            No memories from 2, 4, 6, 8, or 10 months ago.
+          </Text>
+        </Card>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.sectionContainer}>
+        {monthlyEntries.map(([interval, intervalMemories]) => (
+          <View key={interval} style={styles.monthSection}>
+            <Text variant="h3" style={styles.sectionTitle}>
+              {interval} ({intervalMemories.length} {intervalMemories.length === 1 ? 'memory' : 'memories'})
+            </Text>
+            {intervalMemories.map((memory) => (
+              <View key={memory.id} style={styles.memoryContainer}>
+                {renderMemoryItem({ item: memory })}
+                {renderMemoryActions(memory)}
+              </View>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
+
   if (selectedItem) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -98,30 +311,28 @@ export const MemoriesScreen: React.FC = () => {
               Loading your memories...
             </Text>
           </Card>
-        ) : items.length > 0 ? (
-          <FlatList
-            data={items}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.id}
-            style={styles.itemsList}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.itemsListContent}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={10}
-            updateCellsBatchingPeriod={50}
-            initialNumToRender={10}
-            windowSize={10}
-            getItemLayout={(data, index) => ({
-              length: 100, // Approximate item height
-              offset: 100 * index,
-              index,
-            })}
-          />
+        ) : memories.length > 0 ? (
+          <>
+            {renderTabChips()}
+            {activeTab === 'yearly' ? renderYearlySection() : renderMonthlySection()}
+          </>
         ) : (
           <Card style={styles.card}>
             <Text variant="body" style={styles.description}>
-              No memories yet. Start by adding some content from the Add tab!
+              No memories found. Make sure you have items with source dates, or enable fallback to ingestion dates in settings.
             </Text>
+            <View style={styles.debugActions}>
+              <Button
+                title="Debug Data"
+                variant="secondary"
+                onPress={() => debugMemoriesData()}
+              />
+              <Button
+                title="Create Test Data"
+                variant="primary"
+                onPress={() => createTestMemoriesData().then(() => loadMemories())}
+              />
+            </View>
           </Card>
         )}
       </View>
@@ -147,36 +358,46 @@ const styles = StyleSheet.create({
   description: {
     textAlign: 'center',
   },
-  itemsList: {
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  tabChip: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  activeTabChip: {
+    // Active state styling handled by backgroundColor in component
+  },
+  tabText: {
+    fontWeight: '600',
+  },
+  sectionContainer: {
     flex: 1,
   },
-  itemsListContent: {
-    paddingBottom: 16,
+  yearSection: {
+    marginBottom: 24,
   },
-  resultCard: {
-    marginBottom: 8,
+  monthSection: {
+    marginBottom: 24,
   },
-  resultTitle: {
-    marginBottom: 4,
+  sectionTitle: {
+    marginBottom: 12,
+    fontWeight: '600',
   },
-  resultDescription: {
-    marginBottom: 8,
-    opacity: 0.8,
+  memoryContainer: {
+    marginBottom: 16,
   },
-  ocrPreview: {
-    marginBottom: 8,
-    fontStyle: 'italic',
-    opacity: 0.7,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    padding: 8,
-    borderRadius: 4,
-  },
-  resultMeta: {
+  memoryActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  metaText: {
-    opacity: 0.6,
+    justifyContent: 'space-around',
+    marginTop: 8,
+    paddingHorizontal: 16,
+    gap: 8,
   },
   header: {
     padding: 16,
@@ -185,5 +406,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     color: '#007AFF',
+  },
+  debugActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 16,
+    gap: 12,
   },
 });

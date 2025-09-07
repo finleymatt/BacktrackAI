@@ -230,3 +230,66 @@ Generic URL Preview:
 - **Database migrations** may require corresponding Supabase schema updates
 - **Column additions/modifications** need to be reflected in both local SQLite and Supabase
 - **When database errors occur** (like missing columns), consider if Supabase schema needs updating
+CONTEXT
+- We currently have a "Process screenshot OCR" button on the Home screen.
+- I want OCR to be manual only (triggered by that button).
+- The Add > "Scan Screenshots" flow should ONLY ingest screenshots and mark them as pending OCR.
+
+TASK
+A) Ingestion (no OCR)
+1. Update scanScreenshots(limit=50) to:
+   - Request Photos permission.
+   - Fetch the 50 most recent screenshots via expo-media-library.
+   - Insert items into the local DB with fields:
+     • id (uuid)
+     • uri
+     • source = "screenshot"
+     • source_date = asset.creationTime (Photos EXIF)
+     • ocr_status = "pending"
+     • ocr_text = null
+   - Return the list of inserted item IDs.
+
+2. Update AddScreen:
+   - "Scan Screenshots" button calls scanScreenshots(50).
+   - Show a loading state and a success toast with “Imported N screenshots (OCR pending)”.
+   - Do NOT call any OCR function here.
+
+B) Manual OCR processing on Home
+1. Add a data service: processPendingScreenshotOCR({ batchSize = 10 }):
+   - Query up to `batchSize` items where source="screenshot" AND ocr_status="pending".
+   - For each, call extractTextFromImage(uri) from src/features/ingest/ocr.ts.
+   - Update item.ocr_text and set ocr_status="done".
+   - Return counts: { processed, remaining }.
+
+2. Wire the existing Home button "Process screenshot OCR":
+   - On press: disable button, show progress indicator.
+   - Repeatedly call processPendingScreenshotOCR() in batches until remaining=0
+     OR until a safety cap (e.g., max 5 batches per press) to keep UI responsive.
+   - On completion: show toast “OCR complete: X items processed. Y remaining.”
+
+3. Add idempotency guards:
+   - Skip items where ocr_status="done".
+   - If OCR throws for an item, set ocr_status="error" and continue.
+
+DELIVERABLES
+- src/features/ingest/photosScan.ts
+  • export async function scanScreenshots(limit=50): Promise<string[]>
+- src/features/ingest/ocr.ts
+  • (ensure) export async function extractTextFromImage(uri): Promise<string>
+- src/features/ingest/ocrQueue.ts
+  • export async function processPendingScreenshotOCR(opts?: { batchSize?: number, maxBatchesPerRun?: number }): Promise<{ processed:number, remaining:number }>
+- src/screens/AddScreen.tsx
+  • Call scanScreenshots(50) only; remove auto-OCR
+- src/screens/HomeScreen.tsx
+  • Hook up "Process screenshot OCR" button to call processPendingScreenshotOCR in a loop with UI feedback
+
+CONSTRAINTS
+- Keep compatible with Expo Go:
+  • If native OCR isn’t available, extractTextFromImage should return a mocked string and we still mark items "done" with a note (e.g., “[mocked OCR]”).
+- Non-blocking UI: no long-running locks on the main thread; show progress (e.g., “Processing… (10/50)”).
+- Errors must not halt the batch; collect errors and continue.
+
+VERIFY
+- Scan Screenshots imports 50 recent screenshots and shows “(OCR pending)” in item details or count.
+- Pressing “Process screenshot OCR” runs in batches, updates items to ocr_status="done", and displays a final toast with processed/remaining counts.
+- Re-pressing the button when no pending items shows “No pending screenshots to process.”
