@@ -1,0 +1,196 @@
+import React from 'react';
+import { View, StyleSheet, Image, TouchableOpacity, Linking, Alert } from 'react-native';
+import { Text } from './Text';
+import { Card } from './Card';
+import { useTheme } from '../theme/ThemeContext';
+import { Item } from '../data/models';
+
+interface InstagramPreviewProps {
+  item: Item;
+  onPress?: () => void;
+}
+
+export const InstagramPreview: React.FC<InstagramPreviewProps> = ({ item, onPress }) => {
+  const { theme } = useTheme();
+
+  const handleOpenInstagram = async () => {
+    if (!item.content_url) return;
+
+    try {
+      // Try to open Instagram app first
+      const instagramUrl = item.content_url.replace('www.instagram.com', 'instagram.com');
+      const canOpen = await Linking.canOpenURL(instagramUrl);
+      
+      if (canOpen) {
+        await Linking.openURL(instagramUrl);
+      } else {
+        // Fallback to web browser
+        await Linking.openURL(item.content_url);
+      }
+    } catch (error) {
+      console.error('Error opening Instagram:', error);
+      Alert.alert(
+        'Error',
+        'Could not open Instagram. Please check if the app is installed.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleCardPress = () => {
+    if (onPress) {
+      onPress();
+    } else {
+      handleOpenInstagram();
+    }
+  };
+
+  return (
+    <TouchableOpacity onPress={handleCardPress} activeOpacity={0.7}>
+      <Card style={[styles.container, { backgroundColor: theme.colors.surface }]}>
+        {/* Instagram Header */}
+        <View style={styles.header}>
+          <View style={styles.instagramIcon}>
+            <Text style={styles.instagramText}>📷</Text>
+          </View>
+          <View style={styles.headerText}>
+            <Text variant="bodySmall" style={styles.username}>
+              Instagram
+            </Text>
+            <Text variant="caption" style={styles.timestamp}>
+              {new Date(item.created_at).toLocaleDateString()}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={handleOpenInstagram} style={styles.openButton}>
+            <Text variant="caption" style={[styles.openButtonText, { color: theme.colors.primary }]}>
+              Open
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Content Preview */}
+        <View style={styles.content}>
+          {item.thumbnail_url ? (
+            <Image
+              source={{ uri: item.thumbnail_url }}
+              style={styles.thumbnail}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.placeholder, { backgroundColor: theme.colors.border }]}>
+              <Text style={styles.placeholderText}>📷</Text>
+            </View>
+          )}
+          
+          <View style={styles.textContent}>
+            <Text variant="body" style={styles.title} numberOfLines={2}>
+              {item.title}
+            </Text>
+            {item.description && (
+              <Text variant="bodySmall" style={styles.description} numberOfLines={3}>
+                {item.description}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text variant="caption" style={styles.urlText} numberOfLines={1}>
+            {item.content_url}
+          </Text>
+        </View>
+      </Card>
+    </TouchableOpacity>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    paddingBottom: 8,
+  },
+  instagramIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E4405F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  instagramText: {
+    fontSize: 16,
+  },
+  headerText: {
+    flex: 1,
+  },
+  username: {
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  timestamp: {
+    opacity: 0.6,
+  },
+  openButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  openButtonText: {
+    fontWeight: '500',
+  },
+  content: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  thumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  placeholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  placeholderText: {
+    fontSize: 24,
+    opacity: 0.5,
+  },
+  textContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  title: {
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  description: {
+    opacity: 0.8,
+    lineHeight: 16,
+  },
+  footer: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+    paddingTop: 8,
+  },
+  urlText: {
+    opacity: 0.6,
+    fontFamily: 'monospace',
+  },
+});

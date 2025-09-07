@@ -4,3 +4,7 @@ export { Card } from './Card';
 export { ItemDetail } from './ItemDetail';
 export { CircularProgress } from './CircularProgress';
 export { ProgressModal } from './ProgressModal';
+export { TextInput } from './TextInput';
+export { InstagramPreview } from './InstagramPreview';
+export { YouTubePreview } from './YouTubePreview';
+export { UrlPreview } from './UrlPreview';

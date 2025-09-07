@@ -1,5 +1,5 @@
 import { getDatabase, generateId, getCurrentTimestamp } from '../db';
-import { Item, Source } from '../models';
+import { Item, Source, Platform } from '../models';
 import { TABLES } from '../models';
 
 export interface CreateItemData {
@@ -8,6 +8,7 @@ export interface CreateItemData {
   content_url?: string;
   thumbnail_url?: string;
   source: Source;
+  platform?: Platform;
   ocr_text?: string;
   ocr_done?: boolean;
 }
@@ -17,6 +18,7 @@ export interface UpdateItemData {
   description?: string;
   content_url?: string;
   thumbnail_url?: string;
+  platform?: Platform;
   ocr_text?: string;
   ocr_done?: boolean;
 }
@@ -38,8 +40,8 @@ export class ItemsRepository {
     };
 
     await db.runAsync(
-      `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, ocr_text, ocr_done, created_at, ingested_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO ${TABLES.ITEMS} (id, title, description, content_url, thumbnail_url, source, platform, ocr_text, ocr_done, created_at, ingested_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         item.id,
         item.title,
@@ -47,6 +49,7 @@ export class ItemsRepository {
         item.content_url || null,
         item.thumbnail_url || null,
         item.source,
+        item.platform || null,
         item.ocr_text || null,
         item.ocr_done ? 1 : 0,
         item.created_at,
@@ -131,6 +134,10 @@ export class ItemsRepository {
     if (data.thumbnail_url !== undefined) {
       updates.push('thumbnail_url = ?');
       values.push(data.thumbnail_url);
+    }
+    if (data.platform !== undefined) {
+      updates.push('platform = ?');
+      values.push(data.platform);
     }
     if (data.ocr_text !== undefined) {
       updates.push('ocr_text = ?');

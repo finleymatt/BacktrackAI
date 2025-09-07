@@ -1,6 +1,8 @@
 // Database models and TypeScript types for local-first storage
 
-export type Source = 'shared_url' | 'photo_scan';
+export type Source = 'shared_url' | 'photo_scan' | 'url';
+
+export type Platform = 'youtube' | 'spotify' | 'instagram' | 'generic';
 
 export interface User {
   id: string;
@@ -17,6 +19,7 @@ export interface Item {
   content_url?: string;
   thumbnail_url?: string;
   source: Source;
+  platform?: Platform;
   ocr_text?: string;
   ocr_done: boolean;
   created_at: string;
@@ -55,7 +58,7 @@ export interface ItemTag {
 }
 
 // Database schema version for migrations
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 // Table names
 export const TABLES = {

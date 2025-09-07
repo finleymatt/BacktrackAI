@@ -25,10 +25,26 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({ item }) => {
           </Text>
         )}
 
+        {item.content_url && (
+          <View style={styles.urlContainer}>
+            <Text variant="bodySmall" style={styles.urlLabel}>
+              Link:
+            </Text>
+            <Text variant="bodySmall" style={[styles.urlText, { color: theme.colors.primary }]}>
+              {item.content_url}
+            </Text>
+          </View>
+        )}
+
         <View style={styles.metaContainer}>
           <Text variant="caption" style={styles.metaText}>
             Source: {item.source}
           </Text>
+          {item.platform && (
+            <Text variant="caption" style={styles.metaText}>
+              Platform: {item.platform}
+            </Text>
+          )}
           <Text variant="caption" style={styles.metaText}>
             Created: {new Date(item.created_at).toLocaleDateString()}
           </Text>
@@ -77,6 +93,16 @@ const styles = StyleSheet.create({
   description: {
     marginBottom: 12,
     opacity: 0.8,
+  },
+  urlContainer: {
+    marginBottom: 12,
+    padding: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 6,
+  },
+  urlLabel: {
+    marginBottom: 4,
+    fontWeight: '500',
   },
   metaContainer: {
     flexDirection: 'row',

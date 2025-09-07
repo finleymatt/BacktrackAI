@@ -157,6 +157,7 @@ export class SyncService {
             content_url: item.content_url,
             thumbnail_url: item.thumbnail_url,
             source: item.source,
+            platform: item.platform,
             items_embedding: null, // Will be populated later for semantic search
             created_at: item.created_at,
             ingested_at: item.ingested_at,

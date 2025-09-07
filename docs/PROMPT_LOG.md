@@ -176,3 +176,27 @@ CONSTRAINTS
 VERIFY
 - ItemDetail shows extracted text snippet.
 - Searching text finds items based on OCR content.
+
+
+6) URL ingestion (manual entry now, APIs later)
+CONTEXT
+- Users often save things via URL (YouTube video, Spotify song, Instagram post, news article).
+- In the future, we’ll connect directly to APIs (Instagram Graph, YouTube API, Facebook, Edge bookmarks).
+- For now, allow manual URL entry to simulate.
+
+TASK
+Create “Add by URL” flow:
+- User pastes a URL.
+- Fetch allowed oEmbed/metadata (title, thumbnail).
+- Persist to DB with source='url' and platform type (youtube, spotify, instagram, generic).
+
+DELIVERABLES
+- src/features/ingest/urlIngest.ts
+- AddScreen > “Add by URL” field + Save button.
+
+CONSTRAINTS
+- No scraping; only safe metadata fetch.
+- Fallback: if metadata not available, store plain URL.
+
+VERIFY
+- Paste a URL, save → item appears in Home with metadata.

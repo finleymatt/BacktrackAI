@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS items (
   description TEXT,
   content_url TEXT,
   thumbnail_url TEXT,
-  source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan')),
+  source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url')),
+  platform TEXT, -- Platform type for URL items (youtube, spotify, instagram, generic)
   items_embedding TEXT, -- Will be converted to vector(1536) after enabling pgvector
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -73,6 +74,8 @@ CREATE TABLE IF NOT EXISTS item_tags (
 CREATE INDEX IF NOT EXISTS idx_items_user_id ON items(user_id);
 CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at);
 CREATE INDEX IF NOT EXISTS idx_items_source ON items(source);
+CREATE INDEX IF NOT EXISTS idx_items_platform ON items(platform);
+CREATE INDEX IF NOT EXISTS idx_items_user_platform ON items(user_id, platform);
 -- Uncomment after enabling pgvector:
 -- CREATE INDEX IF NOT EXISTS idx_items_embedding ON items USING ivfflat (items_embedding vector_cosine_ops); -- For semantic search
 

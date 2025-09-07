@@ -29,11 +29,11 @@
     "expo-media-library": "~17.1.0",
     "expo-sqlite": "~15.2.14",
     "expo-status-bar": "~2.2.3",
-    "expo-text-recognition": "~13.0.0",
     "react": "19.0.0",
     "react-native": "0.79.5",
     "react-native-safe-area-context": "5.4.0",
-    "react-native-screens": "~4.11.1"
+    "react-native-screens": "~4.11.1",
+    "expo-linking": "~7.1.7"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
