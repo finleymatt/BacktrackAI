@@ -2,6 +2,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { ItemsRepository } from '../../data/repositories/items';
 import { Item } from '../../data/models';
 import { processItemOcr, getOcrConfig, OcrProgressCallback } from './ocr';
+import { keywordTagger } from '../tags';
 
 export interface ScreenshotDetectionResult {
   success: boolean;
@@ -243,6 +244,11 @@ export const createItemFromScreenshot = async (candidate: ScreenshotCandidate): 
     });
   }
 
+  // Tag the item with keywords (run in background)
+  keywordTagger.tagItem(item).catch(error => {
+    console.error(`Background tagging failed for item ${item.id}:`, error);
+  });
+
   return item;
 };
 
@@ -264,6 +270,11 @@ export const createScreenshotItem = async (candidate: ScreenshotCandidate): Prom
     source_date: sourceDate,
     ocr_done: false, // Legacy field
     ocr_status: 'pending', // New field for OCR workflow
+  });
+
+  // Tag the item with keywords (run in background)
+  keywordTagger.tagItem(item).catch(error => {
+    console.error(`Background tagging failed for item ${item.id}:`, error);
   });
 
   return item;

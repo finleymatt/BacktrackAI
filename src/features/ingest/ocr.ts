@@ -1,5 +1,6 @@
 import { Item } from '../../data/models';
 import { ItemsRepository } from '../../data/repositories/items';
+import { keywordTagger } from '../tags';
 
 // OCR Configuration
 export interface OcrConfig {
@@ -223,21 +224,37 @@ export const processItemOcr = async (item: Item): Promise<boolean> => {
     
     if (ocrResult.success && ocrResult.text) {
       // Update item with OCR text
-      await ItemsRepository.update(item.id, {
+      const updatedItem = await ItemsRepository.update(item.id, {
         ocr_text: ocrResult.text,
         ocr_done: true,
       });
       
       console.log(`OCR completed for item ${item.id}: ${ocrResult.text.length} characters extracted`);
+      
+      // Tag the item with keywords after OCR completion (run in background)
+      if (updatedItem) {
+        keywordTagger.tagItem(updatedItem).catch(error => {
+          console.error(`Background tagging failed for item ${item.id} after OCR:`, error);
+        });
+      }
+      
       return true;
     } else {
       // Mark as processed even if no text was found
-      await ItemsRepository.update(item.id, {
+      const updatedItem = await ItemsRepository.update(item.id, {
         ocr_text: '',
         ocr_done: true,
       });
       
       console.log(`OCR completed for item ${item.id}: no text found`);
+      
+      // Tag the item with keywords even if no OCR text (run in background)
+      if (updatedItem) {
+        keywordTagger.tagItem(updatedItem).catch(error => {
+          console.error(`Background tagging failed for item ${item.id} after OCR:`, error);
+        });
+      }
+      
       return true;
     }
   } catch (error) {

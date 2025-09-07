@@ -1,5 +1,6 @@
 import { Platform } from '../../data/models';
 import { ItemsRepository, CreateItemData } from '../../data/repositories/items';
+import { keywordTagger } from '../tags';
 
 // oEmbed response interface
 interface OEmbedResponse {
@@ -196,6 +197,11 @@ export async function ingestUrl(url: string): Promise<{ success: boolean; item?:
     
     // Save to database
     const item = await ItemsRepository.create(itemData);
+    
+    // Tag the item with keywords (run in background)
+    keywordTagger.tagItem(item).catch(error => {
+      console.error(`Background tagging failed for URL item ${item.id}:`, error);
+    });
     
     return {
       success: true,

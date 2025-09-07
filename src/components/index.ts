@@ -14,3 +14,4 @@ export { CreateFolderModal } from './CreateFolderModal';
 export { AddToFolderModal } from './AddToFolderModal';
 export { AddItemsToFolderModal } from './AddItemsToFolderModal';
 export { SearchFiltersComponent } from './SearchFilters';
+export { TagEditor } from './TagEditor';

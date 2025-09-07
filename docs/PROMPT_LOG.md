@@ -341,5 +341,23 @@ VERIFY
   • Instagram saved on this date 3 years ago → appears under “On This Day (3y)”
   • Edge bookmark saved ~+2 days around target date → appears due to ±3d monthly window
 
+7) Search (text + filters across screenshots & URLs)
+CONTEXT
+- We now have items from screenshots + URLs (later from APIs).
+- Need a way to find notes quickly.
 
-  
+TASK
+Implement local search:
+- Keyword search across title, OCR text, URL domain, tags.
+- Filters: source type (screenshot, url, platform-specific), date range, tag.
+- Display results in SearchScreen.
+
+DELIVERABLES
+- src/features/search/search.ts
+- SearchScreen wired with debounced input + filter controls.
+
+CONSTRAINTS
+- Keep local for speed; cloud search later.
+
+VERIFY
+- Searching “Spotify” or “hiking” returns relevant notes.
