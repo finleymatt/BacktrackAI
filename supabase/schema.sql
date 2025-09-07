@@ -24,8 +24,12 @@ CREATE TABLE IF NOT EXISTS items (
   description TEXT,
   content_url TEXT,
   thumbnail_url TEXT,
-  source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url')),
+  source TEXT NOT NULL CHECK (source IN ('shared_url', 'photo_scan', 'url', 'screenshot')),
   platform TEXT, -- Platform type for URL items (youtube, spotify, instagram, generic)
+  source_date TEXT, -- For screenshots, this is the creation time from Photos EXIF
+  ocr_text TEXT,
+  ocr_done BOOLEAN NOT NULL DEFAULT FALSE, -- Legacy field - kept for backward compatibility
+  ocr_status TEXT CHECK (ocr_status IN ('pending', 'done', 'error')), -- New field for tracking OCR processing status
   items_embedding TEXT, -- Will be converted to vector(1536) after enabling pgvector
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -39,6 +43,7 @@ CREATE TABLE IF NOT EXISTS folders (
   name TEXT NOT NULL,
   description TEXT,
   color TEXT,
+  is_public BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

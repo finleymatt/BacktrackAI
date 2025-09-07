@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Text, Card, Button } from '../components';
@@ -7,6 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { signInWithEmail, signUpWithEmail, signOut, supabase } from '../lib/supabase';
 import { getDatabase } from '../data/db';
 import { ItemsRepository, FoldersRepository, TagsRepository } from '../data/repositories';
+import { useSyncStatus, useSync, useAuthStatus, runAllSyncTests } from '../features/sync';
 import { 
   loadMemoriesSettings, 
   saveMemoriesSettings, 
@@ -20,17 +21,16 @@ import {
 export const ProfileScreen: React.FC = () => {
   const { theme } = useTheme();
   const navigation = useNavigation();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<{
-    localCounts: { items: number; folders: number; tags: number };
-  } | null>(null);
   const [memoriesSettings, setMemoriesSettings] = useState<MemoriesSettings | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  
+  // Use sync hooks
+  const { status: syncStatus, loading: syncStatusLoading, refreshStatus } = useSyncStatus();
+  const { sync, isSyncing, lastSyncResult, error: syncError } = useSync();
+  const { isAuthenticated, loading: authLoading, checkAuth } = useAuthStatus();
 
-  // Check authentication status on mount
+  // Load memories settings on mount
   useEffect(() => {
-    checkAuthStatus();
     loadMemoriesSettingsData();
   }, []);
 
@@ -46,51 +46,7 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
-  const checkAuthStatus = async () => {
-    try {
-      // Check auth directly with Supabase
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      console.log('Direct auth check:', { user, authError });
-      
-      const isAuth = !authError && !!user;
-      setIsAuthenticated(isAuth);
-      
-      if (isAuth) {
-        // Get local data counts directly
-        try {
-          const db = await getDatabase();
-          const [itemsCount, foldersCount, tagsCount] = await Promise.all([
-            ItemsRepository.getCount(),
-            FoldersRepository.getCount(),
-            TagsRepository.getCount()
-          ]);
-          
-          setSyncStatus({
-            localCounts: {
-              items: itemsCount,
-              folders: foldersCount,
-              tags: tagsCount
-            }
-          });
-        } catch (dbError) {
-          console.error('Failed to get local counts:', dbError);
-          setSyncStatus({
-            localCounts: {
-              items: 0,
-              folders: 0,
-              tags: 0
-            }
-          });
-        }
-      } else {
-        setSyncStatus(null);
-      }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      setIsAuthenticated(false);
-      setSyncStatus(null);
-    }
-  };
+  // Remove the old checkAuthStatus function since we're using hooks now
 
   const handleSyncNow = async () => {
     if (!isAuthenticated) {
@@ -105,29 +61,35 @@ export const ProfileScreen: React.FC = () => {
       return;
     }
 
-    setIsSyncing(true);
     try {
-      // TODO: Implement SyncService
-      // const result = await SyncService.syncAll();
+      const result = await sync();
       
-      // Placeholder sync functionality
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate sync delay
-      
-      Alert.alert(
-        'Sync Successful',
-        'Data sync completed successfully.',
-        [{ text: 'OK' }]
-      );
-      // Refresh sync status
-      await checkAuthStatus();
+      if (result.success) {
+        const message = `Sync completed successfully!\n\n` +
+          `Items: ${result.itemsSynced}\n` +
+          `Folders: ${result.foldersSynced}\n` +
+          `Tags: ${result.tagsSynced}\n` +
+          `Conflicts resolved: ${result.conflictsResolved}\n` +
+          `Pushed: ${result.syncMetadata.pushed}\n` +
+          `Pulled: ${result.syncMetadata.pulled}`;
+        
+        Alert.alert('Sync Successful', message, [{ text: 'OK' }]);
+        
+        // Refresh sync status
+        await refreshStatus();
+      } else {
+        Alert.alert(
+          'Sync Failed',
+          `Sync completed with errors:\n\n${result.errors.join('\n')}`,
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
       Alert.alert(
         'Sync Error',
         error instanceof Error ? error.message : 'Unknown error occurred',
         [{ text: 'OK' }]
       );
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -167,7 +129,8 @@ export const ProfileScreen: React.FC = () => {
                 const result = await signInWithEmail(email, password);
                 console.log('Sign in result:', result);
                 Alert.alert('Success', 'Signed in successfully!');
-                await checkAuthStatus();
+                await checkAuth();
+                await refreshStatus();
               } catch (error) {
                 console.error('Sign in error:', error);
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -200,7 +163,8 @@ export const ProfileScreen: React.FC = () => {
       const result = await signUpWithEmail(email, password, 'User');
       console.log('Sign up result:', result);
       Alert.alert('Success', 'Account created successfully! You are now signed in.');
-      await checkAuthStatus();
+      await checkAuth();
+      await refreshStatus();
     } catch (error) {
       console.error('Sign up error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -212,7 +176,8 @@ export const ProfileScreen: React.FC = () => {
     try {
       await signOut();
       Alert.alert('Success', 'Signed out successfully!');
-      await checkAuthStatus();
+      await checkAuth();
+      await refreshStatus();
     } catch (error) {
       Alert.alert('Sign Out Failed', error instanceof Error ? error.message : 'Unknown error');
     }
@@ -356,9 +321,38 @@ export const ProfileScreen: React.FC = () => {
     navigation.navigate('Privacy' as never);
   };
 
+  const handleTestSync = async () => {
+    try {
+      Alert.alert(
+        'Test Sync',
+        'This will run comprehensive sync tests. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Run Tests',
+            onPress: async () => {
+              try {
+                const results = await runAllSyncTests();
+                const message = results.syncFunctionality.success 
+                  ? 'Sync tests completed successfully! Check console for details.'
+                  : `Sync tests failed: ${results.syncFunctionality.error}`;
+                Alert.alert('Test Results', message, [{ text: 'OK' }]);
+                await refreshStatus();
+              } catch (error) {
+                Alert.alert('Test Error', error instanceof Error ? error.message : 'Unknown error', [{ text: 'OK' }]);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Test Error', error instanceof Error ? error.message : 'Unknown error', [{ text: 'OK' }]);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.content}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <Text variant="h1" style={styles.title}>
           Profile
         </Text>
@@ -448,7 +442,10 @@ export const ProfileScreen: React.FC = () => {
 
             <Button
               title="Refresh Status"
-              onPress={checkAuthStatus}
+              onPress={async () => {
+                await checkAuth();
+                await refreshStatus();
+              }}
               variant="outline"
               size="small"
               style={styles.refreshButton}
@@ -469,6 +466,14 @@ export const ProfileScreen: React.FC = () => {
                 <Text variant="body" style={styles.statsText}>
                   Local Data: {syncStatus.localCounts.items} items, {syncStatus.localCounts.folders} folders, {syncStatus.localCounts.tags} tags
                 </Text>
+                <Text variant="body" style={styles.statsText}>
+                  Pending Changes: {syncStatus.pendingChanges.items} items, {syncStatus.pendingChanges.folders} folders, {syncStatus.pendingChanges.tags} tags
+                </Text>
+                {syncStatus.lastSyncAt && (
+                  <Text variant="body" style={styles.statsText}>
+                    Last Sync: {new Date(syncStatus.lastSyncAt).toLocaleString()}
+                  </Text>
+                )}
               </View>
             )}
 
@@ -495,12 +500,20 @@ export const ProfileScreen: React.FC = () => {
               style={styles.syncButton}
             />
 
+            <Button
+              title="Test Sync"
+              onPress={handleTestSync}
+              variant="outline"
+              size="small"
+              style={styles.testButton}
+            />
+
             <Text variant="caption" style={styles.devNote}>
               This sync button is only visible in development mode.
             </Text>
           </Card>
         )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -509,9 +522,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  content: {
     padding: 16,
+    paddingBottom: 32,
   },
   title: {
     marginBottom: 24,

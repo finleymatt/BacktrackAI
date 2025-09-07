@@ -1,6 +1,15 @@
 import { getDatabase, generateId, getCurrentTimestamp } from '../db';
 import { Tag } from '../models';
 import { TABLES } from '../models';
+// Import SyncService dynamically to avoid circular dependency
+const markTagDirty = async (tagId: string) => {
+  try {
+    const { SyncService } = await import('../../features/sync');
+    await SyncService.markTagDirty(tagId);
+  } catch (error) {
+    console.warn('Failed to mark tag as dirty for sync:', error);
+  }
+};
 
 export interface CreateTagData {
   name: string;
@@ -37,6 +46,9 @@ export class TagsRepository {
         tag.updated_at,
       ]
     );
+
+    // Mark as dirty for sync
+    await markTagDirty(tag.id);
 
     return tag;
   }
@@ -113,6 +125,9 @@ export class TagsRepository {
       `UPDATE ${TABLES.TAGS} SET ${updates.join(', ')} WHERE id = ?`,
       values
     );
+
+    // Mark as dirty for sync
+    await markTagDirty(id);
 
     return await this.getById(id);
   }

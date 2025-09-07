@@ -1,6 +1,15 @@
 import { getDatabase, generateId, getCurrentTimestamp } from '../db';
 import { Item, Source, Platform, OcrStatus } from '../models';
 import { TABLES } from '../models';
+// Import SyncService dynamically to avoid circular dependency
+const markItemDirty = async (itemId: string) => {
+  try {
+    const { SyncService } = await import('../../features/sync');
+    await SyncService.markItemDirty(itemId);
+  } catch (error) {
+    console.warn('Failed to mark item as dirty for sync:', error);
+  }
+};
 
 export interface CreateItemData {
   title: string;
@@ -63,6 +72,9 @@ export class ItemsRepository {
         item.updated_at,
       ]
     );
+
+    // Mark as dirty for sync
+    await markItemDirty(item.id);
 
     return item;
   }
@@ -174,6 +186,9 @@ export class ItemsRepository {
       `UPDATE ${TABLES.ITEMS} SET ${updates.join(', ')} WHERE id = ?`,
       values
     );
+
+    // Mark as dirty for sync
+    await markItemDirty(id);
 
     return await this.getById(id);
   }

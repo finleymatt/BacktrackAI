@@ -428,3 +428,24 @@ CONSTRAINTS
 
 VERIFY
 - Privacy screen opens with clear sections.
+
+
+14) Sync engine (local ↔ Supabase)
+CONTEXT
+- Local-first storage is primary, but we want optional cloud sync for screenshots, URLs, and later API content.
+
+TASK
+Implement sync:
+- Push: dirty items/folders/tags.
+- Pull: remote updates since last sync.
+- Conflict: last-write-wins with audit log.
+
+DELIVERABLES
+- src/features/sync/sync.ts
+- Profile > “Sync now” button.
+
+CONSTRAINTS
+- Non-blocking; handle offline gracefully.
+
+VERIFY
+- Edits converge after sync.

@@ -1,6 +1,15 @@
 import { getDatabase, generateId, getCurrentTimestamp } from '../db';
 import { Folder } from '../models';
 import { TABLES } from '../models';
+// Import SyncService dynamically to avoid circular dependency
+const markFolderDirty = async (folderId: string) => {
+  try {
+    const { SyncService } = await import('../../features/sync');
+    await SyncService.markFolderDirty(folderId);
+  } catch (error) {
+    console.warn('Failed to mark folder as dirty for sync:', error);
+  }
+};
 
 export interface CreateFolderData {
   name: string;
@@ -44,6 +53,9 @@ export class FoldersRepository {
         folder.updated_at,
       ]
     );
+
+    // Mark as dirty for sync
+    await markFolderDirty(folder.id);
 
     return folder;
   }
@@ -118,6 +130,9 @@ export class FoldersRepository {
       `UPDATE ${TABLES.FOLDERS} SET ${updates.join(', ')} WHERE id = ?`,
       values
     );
+
+    // Mark as dirty for sync
+    await markFolderDirty(id);
 
     return await this.getById(id);
   }
