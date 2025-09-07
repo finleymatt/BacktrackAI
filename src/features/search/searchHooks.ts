@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { SearchService, SearchOptions, SearchResult, SearchFilters } from './search';
+import { SemanticSearchService, SemanticSearchResult } from './semantic';
 import { Source, Platform, Tag } from '../../data/models';
+import { supabase } from '../../lib/supabase';
 
 export interface UseSearchOptions {
   debounceMs?: number;
   defaultLimit?: number;
+  enableSemanticSearch?: boolean;
 }
 
 export interface UseSearchReturn {
@@ -16,6 +19,11 @@ export interface UseSearchReturn {
   results: SearchResult[];
   isLoading: boolean;
   error: string | null;
+  
+  // Semantic search state
+  semanticSearchEnabled: boolean;
+  setSemanticSearchEnabled: (enabled: boolean) => void;
+  semanticSearchAvailable: boolean;
   
   // Search actions
   search: (options?: Partial<SearchOptions>) => Promise<void>;
@@ -45,7 +53,7 @@ export interface UseSearchReturn {
 }
 
 export function useSearch(options: UseSearchOptions = {}): UseSearchReturn {
-  const { debounceMs = 300, defaultLimit = 50 } = options;
+  const { debounceMs = 300, defaultLimit = 50, enableSemanticSearch = false } = options;
   
   // Search state
   const [query, setQuery] = useState('');
@@ -53,6 +61,10 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchReturn {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Semantic search state
+  const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(enableSemanticSearch);
+  const [semanticSearchAvailable, setSemanticSearchAvailable] = useState(false);
   
   // Suggestions state
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -65,6 +77,17 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchReturn {
     tags: Tag[];
   } | null>(null);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+
+  // Check semantic search availability
+  const checkSemanticSearchAvailability = useCallback(async () => {
+    try {
+      const isAvailable = await SemanticSearchService.isAvailable();
+      setSemanticSearchAvailable(isAvailable);
+    } catch (err) {
+      console.error('Failed to check semantic search availability:', err);
+      setSemanticSearchAvailable(false);
+    }
+  }, []);
 
   // Load available filter options
   const loadFilterOptions = useCallback(async () => {
@@ -112,12 +135,43 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchReturn {
     setError(null);
     
     try {
-      const searchResults = await SearchService.search({
-        query: searchQuery,
-        filters: searchFilters,
-        limit: defaultLimit,
-        offset: 0,
-      });
+      let searchResults: SearchResult[] = [];
+
+      // Try semantic search first if enabled and available
+      if (semanticSearchEnabled && semanticSearchAvailable && searchQuery.trim()) {
+        try {
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (!userError && user) {
+            const semanticResults = await SemanticSearchService.search({
+              query: searchQuery,
+              userId: user.id,
+              matchCount: defaultLimit,
+              includeLocalFallback: true
+            });
+            
+            // Convert semantic results to SearchResult format
+            searchResults = semanticResults.map(result => ({
+              ...result,
+              relevanceScore: result.similarity ? result.similarity * 100 : result.relevanceScore,
+              matchedFields: result.matchedFields || ['semantic']
+            }));
+          }
+        } catch (semanticError) {
+          console.log('Semantic search failed, falling back to keyword search:', semanticError);
+          // Fall through to keyword search
+        }
+      }
+
+      // Use keyword search if semantic search didn't work or wasn't enabled
+      if (searchResults.length === 0) {
+        searchResults = await SearchService.search({
+          query: searchQuery,
+          filters: searchFilters,
+          limit: defaultLimit,
+          offset: 0,
+        });
+      }
+
       setResults(searchResults);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Search failed';
@@ -127,7 +181,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [query, filters, defaultLimit]);
+  }, [query, filters, defaultLimit, semanticSearchEnabled, semanticSearchAvailable]);
 
   // Clear search
   const clearSearch = useCallback(() => {
@@ -209,10 +263,11 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchReturn {
     return () => clearTimeout(timeoutId);
   }, [query, loadSuggestions]);
 
-  // Load filter options on mount
+  // Load filter options and check semantic search availability on mount
   useEffect(() => {
     loadFilterOptions();
-  }, [loadFilterOptions]);
+    checkSemanticSearchAvailability();
+  }, [loadFilterOptions, checkSemanticSearchAvailability]);
 
   return {
     // Search state
@@ -223,6 +278,11 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchReturn {
     results,
     isLoading,
     error,
+    
+    // Semantic search state
+    semanticSearchEnabled,
+    setSemanticSearchEnabled,
+    semanticSearchAvailable,
     
     // Search actions
     search,

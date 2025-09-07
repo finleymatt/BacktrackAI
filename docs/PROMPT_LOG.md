@@ -361,3 +361,49 @@ CONSTRAINTS
 
 VERIFY
 - Searching “Spotify” or “hiking” returns relevant notes.
+
+8) Auto-tagging (keywords now, smarter later)
+CONTEXT
+- We want automatic organization: tag items with categories based on their content.
+- Screenshots: derive from OCR text.
+- URLs: derive from domain, title, or known platform type.
+- Later: semantic embeddings + AI.
+
+TASK
+Build a keyword-based tagger:
+- Maintain keyword→tag map (spotify→Music, youtube→Video, instagram→Social, “recipe”→Food).
+- Run tagging on ingest.
+- Allow manual edit in ItemDetail.
+
+DELIVERABLES
+- src/features/tags/keywordTagger.ts
+- Hook into photosScan + urlIngest flows.
+
+CONSTRAINTS
+- Make easy to replace with embeddings later.
+
+VERIFY
+- Saved YouTube URL auto-tagged as “Video”.
+- Searching by tag filters results.
+
+12) Semantic search (future AI upgrade)
+CONTEXT
+- Keyword search works, but we want smarter semantic matches across screenshots, URLs, and future API-based notes.
+
+TASK
+Add optional semantic search:
+- If pgvector (Supabase) enabled, embed text (OCR + titles).
+- Store embeddings for items.
+- Expose toggle: "Enable semantic search".
+
+DELIVERABLES
+- supabase/embeddings.sql or edge function
+- src/features/search/semantic.ts
+- Toggle in SearchScreen.
+
+CONSTRAINTS
+- Only sync items user allows.
+- Keep local fallback if cloud off.
+
+VERIFY
+- Searching "music track" finds Spotify screenshot.

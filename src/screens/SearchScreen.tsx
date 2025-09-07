@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TextInput, FlatList, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TextInput, FlatList, TouchableOpacity, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Card, ItemDetail, ItemCard, InstagramPreview, YouTubePreview, UrlPreview, SearchFiltersComponent } from '../components';
 import { useTheme } from '../theme/ThemeContext';
@@ -10,7 +10,7 @@ export const SearchScreen: React.FC = () => {
   const { theme } = useTheme();
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   
-  // Use the new search hook
+  // Use the new search hook with semantic search support
   const {
     query,
     setQuery,
@@ -22,6 +22,9 @@ export const SearchScreen: React.FC = () => {
     clearSearch,
     clearFilters,
     availableFilters,
+    semanticSearchEnabled,
+    setSemanticSearchEnabled,
+    semanticSearchAvailable,
   } = useSearch({ debounceMs: 300, defaultLimit: 50 });
 
   const renderSearchResult = ({ item }: { item: Item }) => {
@@ -95,6 +98,27 @@ export const SearchScreen: React.FC = () => {
           value={query}
           onChangeText={setQuery}
         />
+
+        {semanticSearchAvailable && (
+          <Card style={styles.semanticToggleCard}>
+            <View style={styles.semanticToggleContainer}>
+              <View style={styles.semanticToggleText}>
+                <Text variant="body" style={styles.semanticToggleTitle}>
+                  Enable Semantic Search
+                </Text>
+                <Text variant="caption" style={styles.semanticToggleDescription}>
+                  Find items by meaning, not just keywords
+                </Text>
+              </View>
+              <Switch
+                value={semanticSearchEnabled}
+                onValueChange={setSemanticSearchEnabled}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                thumbColor={semanticSearchEnabled ? theme.colors.surface : theme.colors.textSecondary}
+              />
+            </View>
+          </Card>
+        )}
 
         <SearchFiltersComponent
           filters={filters}
@@ -244,5 +268,24 @@ const styles = StyleSheet.create({
   },
   backButton: {
     color: '#007AFF',
+  },
+  semanticToggleCard: {
+    marginBottom: 16,
+  },
+  semanticToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  semanticToggleText: {
+    flex: 1,
+    marginRight: 12,
+  },
+  semanticToggleTitle: {
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  semanticToggleDescription: {
+    opacity: 0.7,
   },
 });
