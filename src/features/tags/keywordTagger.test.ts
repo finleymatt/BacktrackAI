@@ -30,6 +30,7 @@ describe('KeywordTagger', () => {
         created_at: new Date().toISOString(),
         ingested_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ocr_done: false,
       };
 
       const tags = await tagger.extractTags(item);
@@ -47,6 +48,7 @@ describe('KeywordTagger', () => {
         created_at: new Date().toISOString(),
         ingested_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ocr_done: false,
       };
 
       const tags = await tagger.extractTags(item);
@@ -64,6 +66,7 @@ describe('KeywordTagger', () => {
         created_at: new Date().toISOString(),
         ingested_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ocr_done: false,
       };
 
       const tags = await tagger.extractTags(item);
@@ -80,6 +83,7 @@ describe('KeywordTagger', () => {
         created_at: new Date().toISOString(),
         ingested_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ocr_done: false,
       };
 
       const tags = await tagger.extractTags(item);
@@ -96,6 +100,7 @@ describe('KeywordTagger', () => {
         created_at: new Date().toISOString(),
         ingested_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ocr_done: false,
       };
 
       const tags = await tagger.extractTags(item);
@@ -113,6 +118,7 @@ describe('KeywordTagger', () => {
         created_at: new Date().toISOString(),
         ingested_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ocr_done: false,
       };
 
       const tags = await tagger.extractTags(item);
@@ -130,6 +136,7 @@ describe('KeywordTagger', () => {
         created_at: new Date().toISOString(),
         ingested_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ocr_done: false,
       };
 
       const tags = await tagger.extractTags(item);

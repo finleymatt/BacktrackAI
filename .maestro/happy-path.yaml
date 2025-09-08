@@ -1,0 +1,67 @@
+appId: com.backtrackai.backtrack
+---
+# Happy Path E2E Test - Complete user journey
+- launchApp
+- assertVisible: 'Home'
+
+# Add a screenshot
+- tapOn: 'Add'
+- assertVisible: 'Add Screenshot'
+- tapOn: 'Add Screenshot'
+- assertVisible: 'Select from Gallery'
+- tapOn: 'Select from Gallery'
+- assertVisible: 'Permission'
+- tapOn: 'Allow'
+- assertVisible: 'Select Image'
+- tapOn: 'Select Image'
+- assertVisible: 'Processing'
+- assertVisible: 'Success'
+- tapOn: 'Done'
+
+# Add a URL
+- tapOn: 'Add'
+- assertVisible: 'Add URL'
+- tapOn: 'Add URL'
+- assertVisible: 'Enter URL'
+- inputText: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+- tapOn: 'Add URL'
+- assertVisible: 'Processing'
+- assertVisible: 'Success'
+- tapOn: 'Done'
+
+# Search for items
+- tapOn: 'Search'
+- assertVisible: 'Search Items'
+- inputText: 'youtube'
+- assertVisible: 'Search Results'
+- tapOn: 'Search Results'
+- assertVisible: 'Item Detail'
+- tapOn: 'Back'
+
+# Check memories
+- tapOn: 'Memories'
+- assertVisible: 'Memories'
+- assertVisible: 'On This Day'
+- tapOn: 'On This Day'
+- assertVisible: 'Memory Items'
+- tapOn: 'Back'
+
+# Check folders
+- tapOn: 'Folders'
+- assertVisible: 'Folders'
+- assertVisible: 'Create Folder'
+- tapOn: 'Create Folder'
+- assertVisible: 'Folder Name'
+- inputText: 'Test Folder'
+- tapOn: 'Create'
+- assertVisible: 'Test Folder'
+- tapOn: 'Back'
+
+# Check profile
+- tapOn: 'Profile'
+- assertVisible: 'Profile'
+- assertVisible: 'Settings'
+- tapOn: 'Settings'
+- assertVisible: 'Settings'
+- tapOn: 'Back'
+- assertVisible: 'Profile'

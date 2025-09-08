@@ -1,0 +1,17 @@
+appId: com.backtrackai.backtrack
+---
+- launchApp
+- assertVisible: 'Add'
+- tapOn: 'Add'
+- assertVisible: 'Add URL'
+- tapOn: 'Add URL'
+- assertVisible: 'Enter URL'
+- inputText: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+- assertVisible: 'Add URL'
+- tapOn: 'Add URL'
+- assertVisible: 'Processing'
+- assertVisible: 'URL Processing'
+- assertVisible: 'Success'
+- assertVisible: 'Item Added'
+- tapOn: 'Done'
+- assertVisible: 'Home'

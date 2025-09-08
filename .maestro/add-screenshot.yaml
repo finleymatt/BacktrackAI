@@ -1,0 +1,19 @@
+appId: com.backtrackai.backtrack
+---
+- launchApp
+- assertVisible: 'Add'
+- tapOn: 'Add'
+- assertVisible: 'Add Screenshot'
+- tapOn: 'Add Screenshot'
+- assertVisible: 'Select from Gallery'
+- tapOn: 'Select from Gallery'
+- assertVisible: 'Permission'
+- tapOn: 'Allow'
+- assertVisible: 'Select Image'
+- tapOn: 'Select Image'
+- assertVisible: 'Processing'
+- assertVisible: 'OCR Processing'
+- assertVisible: 'Success'
+- assertVisible: 'Item Added'
+- tapOn: 'Done'
+- assertVisible: 'Home'

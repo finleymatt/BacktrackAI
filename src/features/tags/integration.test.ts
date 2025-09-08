@@ -16,6 +16,7 @@ const createTestItem = (overrides: Partial<Item> = {}): Item => ({
   created_at: new Date().toISOString(),
   ingested_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  ocr_done: false,
   ...overrides,
 });
 
@@ -134,7 +135,7 @@ describe('Keyword Tagger Integration', () => {
   });
 
   describe('Search Integration', () => {
-    it('should work with search filtering', () => {
+    it('should work with search filtering', async () => {
       // This test verifies that the tagging system is compatible with search
       // The search system should be able to filter by the tags we create
       
@@ -144,7 +145,7 @@ describe('Keyword Tagger Integration', () => {
       });
 
       // Extract tags (this would normally be done during ingest)
-      const tags = keywordTagger.extractTags(testItem);
+      const tags = await keywordTagger.extractTags(testItem);
       
       // Verify that the tags can be used for search filtering
       expect(tags).toContain('Video');

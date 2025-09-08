@@ -35,7 +35,6 @@ const DEFAULT_KEYWORD_MAPPINGS: KeywordTagMapping = {
   'cooking': 'Food',
   'food': 'Food',
   'restaurant': 'Food',
-  'recipe': 'Food',
   'ingredients': 'Food',
   'meal': 'Food',
   'dinner': 'Food',

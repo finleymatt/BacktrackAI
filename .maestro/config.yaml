@@ -1,0 +1,6 @@
+# Maestro configuration for Backtrack AI
+appId: com.backtrackai.backtrack
+---
+# Global configuration
+timeout: 30000
+retries: 3
